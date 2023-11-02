@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-#Function for optimaze
 def func(x, a, b):
     y = a*x + b
     return y
@@ -57,22 +56,19 @@ def curve_fitting(x, y, start, scan_data):
         if scan_data[i] < 100:
             tmp= tmp+1
             alpha = optimize.curve_fit(func, xdata = x[start:i], ydata = y[start:i])[0]
+
             #alpha = np.polyfit(x[start:i], y[start:i], 1)
 
             if i == start+2:
-                print("first int")
                 alpha_o = alpha
             
             if abs(alpha[0]-alpha_o[0]) > epsilonA and abs(alpha[1]-alpha_o[1]) > epsilonB:
-                print("Line break", i-start)
                 return i
             
             if tmp%7==0:
-                print("second value")
                 alpha_o = alpha
 
         else:
-            print("=========== NaN ===========")
             return i
     
     return i
@@ -97,14 +93,14 @@ def line_detection_alg(x,y, scan_data):
     return toPlot
 
 
-for i in [0.10]:
-    epsilonA = i
-    epsilonB = i
 
-    x, y, scan_data = open_json('line_detection_1.json')
-    lines = line_detection_alg(x,y, scan_data)
+epsilonA = 0.174
+epsilonB = 0.174
 
-    plot_from_line(lines)
+x, y, scan_data = open_json('line_detection_1.json')
+lines = line_detection_alg(x,y, scan_data)
+
+plot_from_line(lines)
 
 
 show_plot()
