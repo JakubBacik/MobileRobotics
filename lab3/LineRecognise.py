@@ -7,8 +7,9 @@ import math
 
 
 
-epsilon = 0.15
+epsilon = 0.2
 multistep = 5
+max_dist = 2
 
 
 
@@ -27,10 +28,10 @@ def line_fitting(x, y, start):
     alpha_o = [0,0]
     first_iter = True
     multipoint = True
-#    tmp = 0
+
 
     for i in range(start+2, len(x)):
-        if scan_data[i] > 50:
+        if scan_data[i] > max_dist:
             #print("NaNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNn")
             return i
         
@@ -38,11 +39,10 @@ def line_fitting(x, y, start):
             if multipoint:
                 multi_i = i
                 for j in range( i, min(len(x), i+multistep) ):
-                    if scan_data[i] > 50:
+                    if scan_data[i] > max_dist:
                         i = j-1
                         break
 
-#            tmp = tmp+1
             alpha = optimize.curve_fit(func, xdata = x[start:i], ydata = y[start:i])[0]
 
             if first_iter:
@@ -56,17 +56,37 @@ def line_fitting(x, y, start):
                 else:
                     #print("Line break")
                     return i
-#            else:
-#                if not multipoint:
-#                    multipoint = True
-
-#            if tmp%5==0:
-#                alpha_o = alpha
     
     return i
 
 
 
+def line_recognition( scan_data, robot_position):
+    x = [] 
+    y = []   
+
+    for i in range(0, 512):
+        x.append(scan_data[i] * math.cos(-theta[i]+robot_position[2]) + robot_position[0])
+        y.append(scan_data[i] * math.sin(-theta[i]+robot_position[2]) + robot_position[1])
+
+
+    idx = 0
+    lines = []
+    while idx < len(x)-1:
+        line_tmp = []
+        while scan_data[idx] > max_dist:
+            if idx < len(x)-1:
+                idx += 1
+            else:
+                break
+
+        line_tmp.append( (x[idx],y[idx]) )
+        idx = line_fitting(x,y,idx)
+        line_tmp.append( (x[idx-1], y[idx-1]) )
+
+        lines.append(line_tmp)
+
+    return lines
 
 
 parser = argparse.ArgumentParser()
@@ -80,32 +100,11 @@ data = json.load(json_data)
 x = pl.arange(0,512)
 theta = (pl.pi/512 )*(x-256)  # angle in radians
 
-scan_data=data[0]["scan"]
-robot_position=data[0]["pose"]
+dataset = 4
+scan_data = data[dataset]["scan"]
+robot_position = data[dataset]["pose"]
 
-x = [] 
-y = []   
-
-for i in range(0, 512):
-    x.append(scan_data[i] * math.cos(-theta[i]+robot_position[2]) + robot_position[0])
-    y.append(scan_data[i] * math.sin(-theta[i]+robot_position[2]) + robot_position[1])
-
-
-idx = 0
-lines = []
-while idx < len(x)-1:
-    line_tmp = []
-    while scan_data[idx] > 50:
-        if idx < len(x)-1:
-            idx += 1
-        else:
-            break
-
-    line_tmp.append( (x[idx],y[idx]) )
-    idx = line_fitting(x,y,idx)
-    line_tmp.append( (x[idx-1], y[idx-1]) )
-
-    lines.append(line_tmp)
+lines = line_recognition( scan_data, robot_position)
 
 
 
@@ -120,8 +119,15 @@ ax.add_collection(lc)
 ax.autoscale()
 ax.margins(0.1)
 
+x = [] 
+y = []   
+
+for i in range(0, 512):
+    x.append(scan_data[i] * math.cos(-theta[i]+robot_position[2]) + robot_position[0])
+    y.append(scan_data[i] * math.sin(-theta[i]+robot_position[2]) + robot_position[1])
+
 #Data points plot
-#pl.plot(x, y, 'r.', markersize = 1)
+pl.plot(x, y, 'r.', markersize = 1)
 pl.xlabel('x')
 pl.ylabel('y')
 

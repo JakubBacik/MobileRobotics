@@ -7,6 +7,9 @@ import random
 import math
 import pylab as pl
 from matplotlib import collections  as mc
+import warnings 
+
+warnings.simplefilter('ignore', np.RankWarning)
 
 def open_json_robot_data(name, data_set_number):	
 	json_data = open(name)
@@ -15,8 +18,8 @@ def open_json_robot_data(name, data_set_number):
 	data=data_load[data_set_number]["scan"]
 
 	for i in range(0, len(data)):
-		if math.isinf(data[i]):
-			data[i] = 100
+		if data[i] > 1.5: #math.isinf(data[i]):
+			data[i] = 200
 
 	return data
 
@@ -132,27 +135,45 @@ def RANSAC(data, samples, robot_position, number_of_iteration, chosen_angle, num
 
 	return list_of_lines, random_index_tab
 
-data_set_number=3
+data_set_number = 4
 name = "line_localization_1.json"			
 data = open_json_robot_data(name, data_set_number)
 robot_position = open_json_robot_position(name, data_set_number)
 
-listOfLines,rAll = RANSAC(data, list(data), robot_position, 500,10,5,0.005,50)
+listOfLines,rAll = RANSAC(data, list(data), robot_position, 500,10,5,0.02,50)
 
-radius = 0.1
+
 correct_lines = []
-other_lines = []
-baseline = listOfLines[0]
-correct_lines.append(baseline)
+lines_h = []
+lines_v = []
 
-for index in range(len(listOfLines)):
-    if abs(baseline[0][0] - listOfLines[index][0][0]) > radius or\
-        abs(baseline[0][1] - listOfLines[index][0][1]) > radius or\
-        abs(baseline[1][0] - listOfLines[index][1][0]) > radius or\
-        abs(baseline[1][1] - listOfLines[index][1][1]) > radius:
-        other_lines.append(listOfLines[index])
-		
-correct_lines.append(other_lines[0])
+for i in range(len(listOfLines)):
+    slope = (listOfLines[i][0][1] - listOfLines[i][1][1])/(listOfLines[i][0][0] - listOfLines[i][1][0])
+#    print(f"Slope: {slope} Start: {listOfLines[i][0]} End: {listOfLines[i][1]}")
+    if slope < 0:
+        lines_h.append( listOfLines[i] )
+    else:
+        lines_v.append( listOfLines[i] )
+
+def avg_line( lines ):
+    x1 = 0
+    x2 = 0
+    y1 = 0
+    y2 = 0
+
+    for i in range(len(lines)):
+        x1 = x1 + lines[i][0][0]
+        x2 = x2 + lines[i][1][0]
+        y1 = y1 + lines[i][0][1]
+        y2 = y2 + lines[i][1][1]
+
+    n = len(lines)
+    return [[x1/n, y1/n], [x2/n, y2/n]]
+
+
+correct_lines.append( avg_line(lines_h) )
+correct_lines.append( avg_line(lines_v) )
+
 
 
 def line_intersection(line1, line2):
@@ -198,3 +219,5 @@ plt.show()
 color_of_line = np.array([(1, 0, 0, 1), (0, 1, 0, 1), (0, 0, 1, 1)])
 #draw_plot(listOfLines, color_of_line, name, data_set_number)
 draw_plot(correct_lines, color_of_line, name, data_set_number)
+#draw_plot( lines_h, color_of_line, name, data_set_number)
+#draw_plot( lines_v, color_of_line, name, data_set_number)
