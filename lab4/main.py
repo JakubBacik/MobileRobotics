@@ -15,7 +15,7 @@ def open_json_robot_data(name, data_set_number):
 	data=data_load[data_set_number]["scan"]
 
 	for i in range(0, len(data)):
-		if math.isinf(data[i]):
+		if data[i]> 2:
 			data[i] = 100
 
 	return data
@@ -74,6 +74,7 @@ def pol_to_car(r, theta, robot_position):
 def RANSAC(data, samples, robot_position, number_of_iteration, chosen_angle, number_of_randomly_chose_sample, distance_from_line, number_of_matching_sample):
 	samples_left = 512
 	list_of_lines = []
+	list_of_lidar_angle = []
 	random_index_tab = []
 
 	x = np.arange(0,512)
@@ -125,25 +126,29 @@ def RANSAC(data, samples, robot_position, number_of_iteration, chosen_angle, num
 			pointOne = [first_good_points, p[0] * first_good_points + p[1]]
 			pointTwo = [second_good_pints, p[0] * second_good_pints + p[1]]
 			list_of_lines.append([pointOne, pointTwo])
+			list_of_lidar_angle.append([goodPoints[0], goodPoints[-1]])
 
 			for index in goodPoints:
 				samples[index] = -1
 				samples_left = samples_left - 1
 
-	return list_of_lines, random_index_tab
+	return list_of_lines, random_index_tab, list_of_lidar_angle
 
-data_set_number=3
+data_set_number=2
 name = "line_localization_1.json"			
 data = open_json_robot_data(name, data_set_number)
 robot_position = open_json_robot_position(name, data_set_number)
 
-listOfLines,rAll = RANSAC(data, list(data), robot_position, 500,10,5,0.005,50)
+listOfLines,rAll, lidar = RANSAC(data, list(data), robot_position, 1000,60,40,0.002,50)
 
 radius = 0.1
 correct_lines = []
 other_lines = []
 baseline = listOfLines[0]
+
 correct_lines.append(baseline)
+
+print(lidar)
 
 for index in range(len(listOfLines)):
     if abs(baseline[0][0] - listOfLines[index][0][0]) > radius or\
@@ -172,9 +177,22 @@ def line_intersection(line1, line2):
 
 p1 = np.polyfit(correct_lines[0][0], correct_lines[0][1],1)
 p2 = np.polyfit(correct_lines[1][0], correct_lines[1][1],1)
+
+
+
+def shortest_distance(x1, y1, a, b, c): 
+	d = abs((a * x1 + b * y1 + c)) / (math.sqrt(a * a + b * b))
+	return d
+
 robot_pose=[0,0]
-robot_pose[0] = abs(p1[1])/np.sqrt(p1[0]**2 + 1)
-robot_pose[1] = abs(p2[1])/np.sqrt(p2[0]**2 + 1)
+robot_pose[1] = abs(p1[1])/np.sqrt(p1[0]**2 + 1)
+robot_pose[0] = abs(p2[1])/np.sqrt(p2[0]**2 + 1)
+
+
+print(line_intersection(correct_lines[0], correct_lines[1]))
+print(robot_pose)
+
+
 
 def euclidDist(p1,p2):
 	return np.sqrt((p1[0] -p2[0])**2 + (p1[1] -p2[1])**2)
@@ -190,7 +208,7 @@ ax = plt.subplot(1, 1, 1)
 ax.add_collection(lc)
 ax.axis('equal')
 ax.margins(0.1)
-ax.scatter(abs(robot_pose[0]), abs(robot_pose[1]))
+ax.scatter(robot_pose[0], robot_pose[1])
 plt.show()
 			
 
