@@ -134,30 +134,60 @@ def RANSAC(data, samples, robot_position, number_of_iteration, chosen_angle, num
 
 	return list_of_lines, random_index_tab, list_of_lidar_angle
 
-data_set_number=2
+
+data_set_number=0
 name = "line_localization_1.json"			
 data = open_json_robot_data(name, data_set_number)
 robot_position = open_json_robot_position(name, data_set_number)
 
-listOfLines,rAll, lidar = RANSAC(data, list(data), robot_position, 1000,60,40,0.002,50)
+listOfLines,rAll, lidar = RANSAC(data, list(data), robot_position, 500,10,5,0.02,50)
 
-radius = 0.1
 correct_lines = []
-other_lines = []
-baseline = listOfLines[0]
+lines_h = []
+lines_v = []
 
-correct_lines.append(baseline)
+chosenline = []
+flag_v = 0
+flag_h = 0
 
-print(lidar)
+for i in range(len(listOfLines)):
+	slope = (listOfLines[i][0][1] - listOfLines[i][1][1])/(listOfLines[i][0][0] - listOfLines[i][1][0])
+	if slope < 0:
+		lines_h.append( listOfLines[i] )
+		if flag_v == 0:
+			chosenline.append(i)
+			flag_v += 1
+	else:
+		lines_v.append( listOfLines[i] )
+		if flag_h == 0:
+			chosenline.append(i)
+			flag_h += 1
 
-for index in range(len(listOfLines)):
-    if abs(baseline[0][0] - listOfLines[index][0][0]) > radius or\
-        abs(baseline[0][1] - listOfLines[index][0][1]) > radius or\
-        abs(baseline[1][0] - listOfLines[index][1][0]) > radius or\
-        abs(baseline[1][1] - listOfLines[index][1][1]) > radius:
-        other_lines.append(listOfLines[index])
-		
-correct_lines.append(other_lines[0])
+raw_data = open_json_robot_data(name, data_set_number)
+print(lidar[chosenline[0]], lidar[chosenline[1]])
+
+print("index lidar line 1:", raw_data[lidar[chosenline[0]][0]], raw_data[lidar[chosenline[0]][1]])
+print("index lidat line 2:", raw_data[lidar[chosenline[1]][0]], raw_data[lidar[chosenline[1]][1]])
+
+def avg_line( lines ):
+    x1 = 0
+    x2 = 0
+    y1 = 0
+    y2 = 0
+
+    for i in range(len(lines)):
+        x1 = x1 + lines[i][0][0]
+        x2 = x2 + lines[i][1][0]
+        y1 = y1 + lines[i][0][1]
+        y2 = y2 + lines[i][1][1]
+
+    n = len(lines)
+    return [[x1/n, y1/n], [x2/n, y2/n]]
+
+
+correct_lines.append( avg_line(lines_h) )
+correct_lines.append( avg_line(lines_v) )
+
 
 
 def line_intersection(line1, line2):
@@ -179,18 +209,13 @@ p1 = np.polyfit(correct_lines[0][0], correct_lines[0][1],1)
 p2 = np.polyfit(correct_lines[1][0], correct_lines[1][1],1)
 
 
-
-def shortest_distance(x1, y1, a, b, c): 
-	d = abs((a * x1 + b * y1 + c)) / (math.sqrt(a * a + b * b))
-	return d
-
 robot_pose=[0,0]
 robot_pose[1] = abs(p1[1])/np.sqrt(p1[0]**2 + 1)
 robot_pose[0] = abs(p2[1])/np.sqrt(p2[0]**2 + 1)
 
 
-print(line_intersection(correct_lines[0], correct_lines[1]))
-print(robot_pose)
+print("robot_pose line_intersection :", line_intersection(correct_lines[0], correct_lines[1]))
+print("robot_pose distance_from_line :", robot_pose)
 
 
 
@@ -216,3 +241,61 @@ plt.show()
 color_of_line = np.array([(1, 0, 0, 1), (0, 1, 0, 1), (0, 0, 1, 1)])
 #draw_plot(listOfLines, color_of_line, name, data_set_number)
 draw_plot(correct_lines, color_of_line, name, data_set_number)
+
+
+
+import matplotlib.pyplot as plt
+import numpy as np
+from math import sin, cos, acos
+import json
+import sys
+
+def pol2Car(r, theta):
+	x = r * cos(theta)
+	y = r * sin(theta)
+	point = np.matrix([[x],[y]])
+	return point
+def f(z, *args):
+	x,y=z
+	x1, y1, x2, y2, d1, d2 = args
+	return ((((x1-x)**2)+((y1-y)**2)-d1**2)**2)+((((x2-x)**2)+((y2-y)**2)-d2**2)**2)
+    
+
+
+alpha1 = (np.pi/512 )*lidar[chosenline[1]][0] 
+alpha2 = (np.pi/512 )*lidar[chosenline[1]][1] 
+
+d1 = raw_data[lidar[chosenline[1]][0]]
+d2 = raw_data[lidar[chosenline[1]][1]]
+p1 = pol2Car(d1, alpha1)
+p2 = pol2Car(d2, alpha2)
+
+#print "Angles to markers in iteration 0:"
+#print "alpha1=%f, alpha2=%f" % (alpha1,alpha2)
+#print "d1=%f, d2=%f" % (d1,d2)
+
+d0 = np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+#print "d0=%f" % (d0)
+
+
+areaOfTriangle = d1 * d2 * np.sin(np.abs(alpha1 - alpha2)) / 2
+#print "areaOfTriangle=%f" % (areaOfTriangle)
+
+hate = areaOfTriangle * 2 / d0
+#print "y = hate=%f" % (hate)
+y = hate;
+
+beta = np.arcsin(areaOfTriangle * 2 / (d1 * d0));
+
+x = hate / np.tan(beta);
+
+d2ForRightAngled = np.sqrt(d1**2 + d0**2)
+if (d2 > d2ForRightAngled):
+	x = -x
+
+print("geometric_aproach :", x[0][0], " ", y[0][0])
+
+
+gamma = np.arcsin(x / d2)
+theta = alpha1 + gamma - np.pi/2;
+print("geometric_aproach theta: ", theta[0][0])
