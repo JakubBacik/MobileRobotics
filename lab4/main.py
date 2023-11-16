@@ -135,7 +135,7 @@ def RANSAC(data, samples, robot_position, number_of_iteration, chosen_angle, num
 	return list_of_lines, random_index_tab, list_of_lidar_angle
 
 
-data_set_number=0
+data_set_number=1
 name = "line_localization_1.json"			
 data = open_json_robot_data(name, data_set_number)
 robot_position = open_json_robot_position(name, data_set_number)

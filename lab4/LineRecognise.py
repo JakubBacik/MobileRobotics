@@ -15,80 +15,66 @@ treshold = 0.03#0.02
 max_dist = 2
 cancel_len = 0.5
 
+
+
 def euclidDist(p1,p2):
 	return np.sqrt((p1[0] -p2[0])**2 + (p1[1] -p2[1])**2)
+
+
 
 def shortest_distance(x1, y1, a, b, c):    
     d = abs((a * x1 + b * y1 + c)) / (math.sqrt(a * a + b * b))
     return d
 
+
+
 def distance_beetwen_to_point(line):
     return math.sqrt( (line[1][0] - line[0][0])**2 + (line[1][1] - line[0][1])**2 )
+
 
 
 def func(x, a, b):
     y = a*x + b
     return y
 
+
+
 def line_fitting(x, y, start):
-    if start+2 >= len(x):
+    if start+multistep >= len(x):   #prevent out of bound index
         return len(x)-1
-    
-    alpha_o = [0,0]
-    first_iter = True
-    multipoint = True
 
+    for j in range(start, start+multistep):
+        if scan_data[j] > max_dist:
+            return j
 
-    for i in range(start+2, len(x)):
+    for i in range(start+multistep, len(x)):
         if scan_data[i] > max_dist:
-            return i
+            break
+
+        alpha = optimize.curve_fit(func, xdata = x[start:i], ydata = y[start:i])[0]
         
-        else:
-            if multipoint:
-                multi_i = i
-                for j in range( i, min(len(x), i+multistep) ):
-                    if scan_data[i] > max_dist:
-                        i = j-1
-                        break
+        if shortest_distance(x[i], y[i], alpha[0], -1, alpha[1]) > treshold: 
+            break
 
-            alpha = optimize.curve_fit(func, xdata = x[start:i], ydata = y[start:i])[0]
-
-            if first_iter:
-                alpha_o = alpha
-                first_iter = False
-            
-            if shortest_distance(x[i], y[i], alpha[0], -1, alpha[1]) > treshold: 
-                if multipoint:
-                    i = multi_i
-                    multipoint = False
-                else:
-                    #print("Line break")
-                    return i
-    
     return i
 
 
 
 def line_recognition( scan_data, robot_position):
-    x = [] 
-    y = []   
-
-    for i in range(0, 512):
-        x.append(scan_data[i] * math.cos(-theta[i]+robot_position[2]) + robot_position[0])
-        y.append(scan_data[i] * math.sin(-theta[i]+robot_position[2]) + robot_position[1])
-
     idx = 0
     lines = []
     index_of_lidar = []
+    x, y = get_xy( scan_data, robot_position)
+
     while idx < len(x)-1:
         line_tmp = []
         indx_tmp = []
+
         while scan_data[idx] > max_dist:
             if idx < len(x)-1:
                 idx += 1
             else:
                 break
-
         
         line_tmp.append( (x[idx],y[idx]) )
         indx_tmp.append(idx)
@@ -101,17 +87,24 @@ def line_recognition( scan_data, robot_position):
 
     return lines, index_of_lidar
 
+
+
 def choose_corect_line(lines):
     correct_line = []
+
     for i in range(len(lines)):
         if distance_beetwen_to_point(lines[i]) > cancel_len and distance_beetwen_to_point(lines[i]) < 100:
             correct_line.append(lines[i])
             
     return correct_line
 
-def get_raw_data(scan_data, robot_position):
+
+
+def get_xy(scan_data, robot_position):
     x = [] 
     y = []   
+
+    theta = (pl.pi/512 )*(pl.arange(0,512)-256)  # angle in radians
 
     for i in range(0, 512):
         x.append(scan_data[i] * math.cos(-theta[i]+robot_position[2]) + robot_position[0])
@@ -119,23 +112,40 @@ def get_raw_data(scan_data, robot_position):
 
     return x, y
 
+
+
+def pol2Car(r, theta):
+	x = r * cos(theta)
+	y = r * sin(theta)
+	point = np.matrix([[x],[y]])
+	return point
+
+
+
+def f(z, *args):
+	x,y=z
+	x1, y1, x2, y2, d1, d2 = args
+	return ((((x1-x)**2)+((y1-y)**2)-d1**2)**2)+((((x2-x)**2)+((y2-y)**2)-d2**2)**2)
+
+
+
+def get_raw_data():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename", help="name of the json data file")
+    parser.add_argument("number", help="database set number")
+    args = parser.parse_args()
+
+    json_data = open(args.filename)
+    data = json.load(json_data)
+    dataset = int(args.number)
+
+    return data[dataset]["scan"], data[dataset]["pose"]
+
+
+
 ####################################################################### Start 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("filename", help="name of the json data file")
-parser.add_argument("number")
-args = parser.parse_args()
-
-##reading data from file
-json_data = open(args.filename)
-data = json.load(json_data)
-
-x = pl.arange(0,512)
-theta = (pl.pi/512 )*(x-256)  # angle in radians
-
-dataset = int(args.number)
-scan_data = data[dataset]["scan"]
-robot_position = data[dataset]["pose"]
+scan_data, robot_position = get_raw_data()
 
 lines, index_of_lidar = line_recognition( scan_data, robot_position)
 correct_line = choose_corect_line(lines)
@@ -146,9 +156,9 @@ ax.add_collection(lc)
 ax.autoscale()
 ax.margins(0.1)
 
-x, y = get_raw_data(scan_data, robot_position)
+x, y = get_xy(scan_data, robot_position)
 
-pl.plot(x, y, 'r.', markersize = 0.1, color='green')
+pl.plot(x, y, 'r.', markersize = 1)#, color='green')
 pl.xlabel('x')
 pl.ylabel('y')
 pl.axis('equal')
@@ -178,16 +188,6 @@ ax.axis('equal')
 ax.margins(0.1)
 ax.scatter(robot_pose[0], robot_pose[1])
 			
-
-def pol2Car(r, theta):
-	x = r * cos(theta)
-	y = r * sin(theta)
-	point = np.matrix([[x],[y]])
-	return point
-def f(z, *args):
-	x,y=z
-	x1, y1, x2, y2, d1, d2 = args
-	return ((((x1-x)**2)+((y1-y)**2)-d1**2)**2)+((((x2-x)**2)+((y2-y)**2)-d2**2)**2)
     
 print(index_of_lidar)
 
