@@ -89,14 +89,16 @@ def line_recognition( scan_data, robot_position):
 
 
 
-def choose_corect_line(lines):
+def choose_corect_line(lines, index_of_lidar):
     correct_line = []
+    iol = []
 
     for i in range(len(lines)):
         if distance_beetwen_to_point(lines[i]) > cancel_len and distance_beetwen_to_point(lines[i]) < 100:
             correct_line.append(lines[i])
+            iol.append(index_of_lidar[i])
             
-    return correct_line
+    return correct_line, iol
 
 
 
@@ -148,7 +150,8 @@ def get_raw_data():
 scan_data, robot_position = get_raw_data()
 
 lines, index_of_lidar = line_recognition( scan_data, robot_position)
-correct_line = choose_corect_line(lines)
+
+correct_line, index_of_lidar = choose_corect_line( lines, index_of_lidar)
 
 lc = mc.LineCollection(correct_line, linewidths=2)
 fig, ax = pl.subplots()
