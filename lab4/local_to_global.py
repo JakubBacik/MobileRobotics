@@ -16,24 +16,23 @@ data = json.load(json_data)
 
 
 robot_pose = []
+odom_0 = pose[0]
+odom_world = []
 
 for i in range(0,5):
-    print(data[i]['pose'])
+    print('Calculated pose: ', pose[i])
+    odom_world.append( [-data[i]['pose'][0] + odom_0[0], -data[i]['pose'][1] + odom_0[1], -data[i]['pose'][2] + odom_0[2] ] )
+    print('Odom position in world frame: ', odom_world[i])
+    print('Error: ', [ odom_world[i][0] - pose[i][0], odom_world[i][1] - pose[i][1], odom_world[i][2] - pose[i][2] ] )
+    print(' ')
 
-x=pose[0][0]
-y=pose[0][1]
-theta = 135
+    plt.xlim(0, 1.25)
+    plt.ylim(0, 1.25)
+    plt.grid()
+    plt.xlabel('x [m]')
+    plt.ylabel('y [m]')
+    plt.title('Dataset %d' % i)
+    plt.plot( odom_world[i][1], odom_world[i][0], marker="o", markersize=9, markeredgecolor="red")
+    plt.plot( pose[i][1], pose[i][0], marker="x", markersize=9, markeredgecolor="blue")
+    plt.show()
 
-for i in range(0,5):
-    robot_position = data[i]['pose']
-    x = (robot_position[0] * math.cos(math.radians(theta + robot_position[2]))) + x
-    y = (robot_position[1] * math.sin(math.radians(theta + robot_position[2]))) + y
-    robot_pose.append([x, y])
-
-
-plt.xlim(-1.25, 1.25)
-plt.ylim(-1.25, 1.25)
-plt.grid()
-for i in range(0,5):
-    plt.plot(robot_pose[i][1], robot_pose[i][0], marker="x", markersize=9, markeredgecolor="red")
-plt.show()
