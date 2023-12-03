@@ -8,7 +8,7 @@ from scipy.optimize import fmin_cg
 from matplotlib import pyplot as plt
 
 pose = [[0.5586947070822248, 0.6511713988881517, 57.97214329552892],[0.6465763716613563, 0.7150069719014344, 89.72656896961927], \
-       [0.7989620831986594, 0.43977675072769545, 0],  [0.5154200765953387, 0.8358625075521338, 68.10270372691767], [1.1241869494099048, 1.2077680340604822, 95.59997281479365]]
+       [0.7989620831986594, 0.43977675072769545, 99.25458],  [0.5154200765953387, 0.8358625075521338, 68.10270372691767], [1.1241869494099048, 1.2077680340604822, 95.59997281479365]]
 
 
 json_data = open('line_localization_1.json')
@@ -32,7 +32,8 @@ for i in range(0,5):
     plt.xlabel('x [m]')
     plt.ylabel('y [m]')
     plt.title('Dataset %d' % i)
-    plt.plot( odom_world[i][1], odom_world[i][0], marker="o", markersize=9, markeredgecolor="red")
-    plt.plot( pose[i][1], pose[i][0], marker="x", markersize=9, markeredgecolor="blue")
+    plt.plot( odom_world[i][0], odom_world[i][1], marker="x", markersize=9, markeredgecolor="red", label = 'Odometry')
+    plt.plot( pose[i][0], pose[i][1], marker="o", markersize=9, markeredgecolor="blue", label = 'Feature')
+    plt.legend(loc="upper left")
     plt.show()
 

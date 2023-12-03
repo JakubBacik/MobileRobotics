@@ -24,7 +24,7 @@ def distancePointToLine(A, B, C, xPoint, yPoint):
 class map:
     
     def __init__(self):
-        self.size = 10
+        self.size = 15
         self.resolution = 0.1 
         self.numberOfBox = int(self.size/self.resolution)
         # self.map = [[0]*self.numberOfBox]*self.numberOfBox
@@ -34,7 +34,7 @@ class map:
 
 
     def printMap(self):
-        pl.imshow(self.map, interpolation="nearest",cmap='autumn')
+        pl.imshow(self.map, interpolation="nearest",cmap='Blues')
         pl.colorbar()
         pl.show()
     
@@ -45,7 +45,7 @@ class map:
     
 
 
-    def something(self, dataScan, dataPose):
+    def scan_to_map(self, dataScan, dataPose):
         theta = (pl.pi/512 )*(pl.arange(0,512)-256)  # angle in radian
 
         robot_x = int( dataPose[0]/self.resolution) + self.center
@@ -63,72 +63,68 @@ class map:
                         self.map[i][j] += 0.1
 
 
+
     def iterateLidar(self, dataScan, dataPose):
-        theta = (pl.pi/512 )*(pl.arange(0,512)-256)
+        theta = (pl.pi/512 )*(pl.arange(0,512))
         
         for k in range(len(dataScan)):
             if pl.isinf(dataScan[k]) or pl.isnan(dataScan[k]):
                 continue  
 
             pt = pol2Car(dataScan[k], theta[k], dataPose)
-            self.substractPointsOnLine( dataPose, pt)  
+            self.substractPointsOnLine( pt, dataPose)  
 
             obstacle_x = int(pt[0]/self.resolution) + self.center
             obstacle_y = int(pt[1]/self.resolution) + self.center
 
             # self.map[obstacle_x][obstacle_y] += 0.1   
-            print(obstacle_x, " ",obstacle_y, " ", theta[k])
+            #print("X: ", obstacle_x, " Y: ",obstacle_y, " X_r: ",pt[0], " Y_r: ", pt[1], " T: ", theta[k])
+            self.map[obstacle_x][obstacle_y] = 2
 
         
-    # def substractPointsOnLine(self, robot_p, obstacle_p):
-    #     points = []
-    #     robot_x = int(robot_p[0]/self.resolution) + self.center
-    #     robot_y = int(robot_p[1]/self.resolution) + self.center
-    #     obstacle_x = int(obstacle_p[0]/self.resolution) + self.center
-    #     obstacle_y = int(obstacle_p[1]/self.resolution) + self.center
 
-    #     dx = robot_p[1] - obstacle_p[1]
-    #     dy = obstacle_p[0] - robot_p[0] 
-    #     C = robot_p[0] * obstacle_p[1] - obstacle_p[0] * robot_p[1]
+    def box_coord(self, x, y ):
+        box_x = int( x / self.resolution) + self.center
+        box_y = int( y / self.resolution) + self.center
+        return pl.array([box_x, box_y])
 
 
-    #     for x in range(robot_x, obstacle_x):
-    #         for y in range(robot_y, obstacle_y):
-    #             if (distancePointToLine(dx, dy, C, x, y) < pl.sqrt(2)/2 * self.resolution):
-    #                 self.map[x][y] -= 0.1
 
-    def substractPointsOnLine(self, startPoint, endPoint):
-        A = endPoint[1] - startPoint[1]
-        B = startPoint[0] - endPoint[0]
-        C = endPoint[0] * startPoint[1] - startPoint[0] * endPoint[1]
+    def map_coord(self, x, y ):
+        real_x = (x - self.center) * self.resolution
+        real_y = (y - self.center) * self.resolution
+        return pl.array([real_x, real_y])
+
+
+
+    def scan_line_range(self, start, end, coord):
+        scan_range = 0
+
+        if (start[coord] < end[coord]):
+            scan_range = range(start[coord], end[coord])
+        elif (start[coord] > end[coord]):
+            scan_range = range(start[coord], end[coord], -1)
+        else:
+            scan_range = [start[coord]]
+
+        return scan_range
+
+
+
+    def substractPointsOnLine(self, start, end):
+        A = end[1] - start[1]
+        B = start[0] - end[0]
+        C = end[0] * start[1] - start[0] * end[1]
+
         boxes = []
-        robot_x = int(startPoint[0]/self.resolution) + self.center
-        robot_y = int(startPoint[1]/self.resolution) + self.center
-        startPointInt = (robot_x, robot_y)
 
-        obstacle_x = int(endPoint[0]/self.resolution) + self.center
-        obstacle_y = int(endPoint[1]/self.resolution) + self.center
+        start_box = self.box_coord( start[0], start[1])
+        end_box = self.box_coord( end[0], end[1])
 
-        endPointInt = (obstacle_x, obstacle_y)
-        rangeForX = 0;
-        if (startPointInt[0] < endPointInt[0]):
-            rangeForX = range(startPointInt[0], endPointInt[0])
-        elif (startPointInt[0] > endPointInt[0]):
-            rangeForX = range(startPointInt[0], endPointInt[0], -1)
-        else:
-            rangeForX = [startPointInt[0]]
-        rangeForY = 0;
-        if (startPointInt[1] < endPointInt[1]):
-            rangeForY = range(startPointInt[1], endPointInt[1])
-        elif (startPointInt[1] > endPointInt[1]):
-            rangeForY = range(startPointInt[1], endPointInt[1], -1)
-        else:
-            rangeForY = [startPointInt[1]]
-            
-        for x in rangeForX:
-            for y in rangeForY:
-                globPos = globalPosOfBox([x,y])
-                if (distancePointToLine(A,B,C,globPos[0],globPos[1]) < np.sqrt(2)/2 * boxSize):
+        for x in self.scan_line_range( start_box, end_box, 0):
+            for y in self.scan_line_range( start_box, end_box, 1):
+                box_pos = self.map_coord(x,y)
+                if ( distancePointToLine( A, B, C, box_pos[0], box_pos[1]) < pl.sqrt(2)/2 * self.resolution):
                     boxes.append([x,y])
                     self.map[x][y] -= 0.1
                    
@@ -136,11 +132,14 @@ class map:
 
 
 
+
 def pol2Car(r, theta, pose):
-    x = r * cos(-theta+pose[2]) + pose[0]
-    y = r * sin(-theta+pose[2]) + pose[1]
+    x = r * cos(theta-pose[2]) + pose[0]
+    y = r * sin(theta-pose[2]) + pose[1]
     point = pl.matrix([[x],[y]])
     return point
+
+
 
 def get_xy(scan_data, robot_position):
     x = [] 
@@ -154,16 +153,21 @@ def get_xy(scan_data, robot_position):
 
     return x, y
 
+
+
+
+
+
 dataScan, dataPose = get_raw_data()
 print(dataPose)
 
 x, y = get_xy(dataScan, dataPose)
 
-pl.plot(x, y, 'r.', markersize = 1)#, color='green')
-pl.xlabel('x')
-pl.ylabel('y')
-pl.axis('equal')
-pl.show()
+#pl.plot(x, y, 'r.', markersize = 1)#, color='green')
+#pl.xlabel('x')
+#pl.ylabel('y')
+#pl.axis('equal')
+#pl.show()
 
 Map = map()
 # Map.something(dataScan, dataPose)
