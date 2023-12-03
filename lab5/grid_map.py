@@ -5,26 +5,6 @@ from math import cos, sin, log10
 import sys
 
 
-
-def get_raw_data():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("filename", help="name of the json data file")
-    parser.add_argument("number", help="database set number")
-    args = parser.parse_args()
-
-    json_data = open(args.filename)
-    data = json.load(json_data)
-    dataset = int(args.number)
-
-    return data[dataset]["scan"], data[dataset]["pose"]
-
-
-
-def distancePointToLine(A, B, C, xPoint, yPoint):
-    return pl.absolute(A * xPoint + B * yPoint + C) / pl.sqrt(A*A + B*B)
-
-
-
 class map:
     
     def __init__(self):
@@ -32,6 +12,7 @@ class map:
         self.resolution = 0.1 
         self.numberOfBox = int(self.size/self.resolution)
         self.map =  pl.ones((self.numberOfBox, self.numberOfBox))/2
+        self.prob_map =  pl.ones((self.numberOfBox, self.numberOfBox))/2
         self.center = int(self.numberOfBox/2)
 
         self.hit_threshold = 10
@@ -39,47 +20,38 @@ class map:
         self.p_hit = 0.95
         self.p_miss = 0.3
 
-        self.sensor_displacement = 0.1
+        self.sensor_displacement = 0.05
 
 
 
     def printMap(self):
-        pl.imshow(self.map, interpolation="nearest", cmap='Blues', origin='lower')
-        pl.show()
+#        pl.imshow(self.map, interpolation="nearest", cmap='Blues', origin='lower')
+#        pl.show()
+#
+ 
+        self.fig = pl.figure()       
+        self.show = pl.imshow( self.prob_map, interpolation="nearest", cmap='Blues', origin='lower')
+        pl.show( block=False )
+        pl.pause( 1.0 )
 
-        prob_map = self.computeProbab(self.map)
-        pl.imshow(prob_map, interpolation="nearest", cmap='Blues', origin='lower')
-        pl.show()
-    
 
 
-    def scan_to_map(self, dataScan, dataPose):
-        theta = (pl.pi/512 )*(pl.arange(0,512)-256)  # angle in radian
-
-        robot_x = int( dataPose[0]/self.resolution) + self.center
-        robot_y = int(dataPose[1]/self.resolution) + self.center
-        self.map[robot_x][robot_y] = -1
-        
-        for i in range(self.numberOfBox):
-            for j in range(self.numberOfBox):
-                for k in range(len(dataScan)):
-                    if pl.isinf(dataScan[k]) or pl.isnan(dataScan[k]):
-                        continue
-
-                    pt = pol2Car(dataScan[k], theta[k], dataPose)
-                    if pt[0] > i*self.resolution and pt[0] < (i+1)*self.resolution and pt[1] > j*self.resolution and pt[1] < (j+1)*self.resolution:
-                        self.map[i][j] += 0.1
+    def update(self):
+        self.show.set_array(self.prob_map)
+        pl.show( block=False )
+#        self.fig.hold()
 
 
 
     def iterateLidar(self, dataScan, robot_position):
         theta = (pl.pi/512 )*(pl.arange(0,512)-256)
+        robot_position[2] = (robot_position[2]/180) * pl.pi
+        sensor_position = sensor_shift( self.sensor_displacement, 0, robot_position)
+        print(sensor_position)
         
         for k in range(len(dataScan)):
             if pl.isinf(dataScan[k]) or pl.isnan(dataScan[k]):
                 continue  
-
-            sensor_position = sensor_shift( self.sensor_displacement, 0, robot_position)
 
             pt = pol2Car(dataScan[k], theta[k], sensor_position)
             self.substractPointsOnLine( pt, sensor_position)  
@@ -88,6 +60,8 @@ class map:
             obstacle_y = int(pt[1]/self.resolution) + self.center
 
             self.map[obstacle_x][obstacle_y] = self.hit( self.map[obstacle_x][obstacle_y] )
+
+        self.prob_map = self.computeProbab(self.map)
 
         
 
@@ -189,16 +163,50 @@ def sensor_shift(r, theta, pose):
 
 
 
+def get_raw_data():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename", help="name of the json data file")
+    parser.add_argument("number", help="database set number")
+    args = parser.parse_args()
+
+    json_data = open(args.filename)
+    data = json.load(json_data)
+    dataset = int(args.number)
+
+    return data[dataset]["scan"], data[dataset]["pose"]
+
+
+
+def get_raw_data_bulk():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename", help="name of the json data file")
+    args = parser.parse_args()
+
+    json_data = open(args.filename)
+    data = json.load(json_data)
+
+    return data, len(data)
+
+
+
+
+def distancePointToLine(A, B, C, xPoint, yPoint):
+    return pl.absolute(A * xPoint + B * yPoint + C) / pl.sqrt(A*A + B*B)
 
 
 
 
 
-dataScan, dataPose = get_raw_data()
-print(dataPose)
-
+data, size = get_raw_data_bulk()
 
 Map = map()
-Map.iterateLidar(dataScan, dataPose)
+Map.iterateLidar( data[0]["scan"], data[0]["pose"])
 Map.printMap()
+
+for dataset in range(1, size):
+    print("dataset: ")
+    print(data[dataset]["pose"])
+    
+    Map.iterateLidar( data[dataset]["scan"], data[dataset]["pose"])
+    Map.update()
 
