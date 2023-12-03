@@ -8,7 +8,7 @@ import sys
 class map:
     
     def __init__(self):
-        self.size = 15
+        self.size = 16
         self.resolution = 0.1 
         self.numberOfBox = int(self.size/self.resolution)
         self.map =  pl.ones((self.numberOfBox, self.numberOfBox))/2
@@ -21,24 +21,30 @@ class map:
         self.p_miss = 0.3
 
         self.sensor_displacement = 0.05
+        self.pathX = []
+        self.pathY = []
 
 
 
-    def printMap(self):
-#        pl.imshow(self.map, interpolation="nearest", cmap='Blues', origin='lower')
-#        pl.show()
-#
- 
-        self.fig = pl.figure()       
+    def printMap(self, pose):
+        boxCordPos = self.box_coord(pose[0], pose[1])
+        self.pathX.append(boxCordPos[0])
+        self.pathY.append(boxCordPos[1])    
         self.show = pl.imshow( self.prob_map, interpolation="nearest", cmap='Blues', origin='lower')
         pl.show( block=False )
-        pl.pause( 1.0 )
+        pl.pause( 0.1 )
 
 
 
-    def update(self):
-        self.show.set_array(self.prob_map)
+    def update(self, pose):
+        boxCordPos = self.box_coord(pose[0], pose[1])
+        self.pathX.append(boxCordPos[0])
+        self.pathY.append(boxCordPos[1])
+        self.show.set_data(self.prob_map)
+        pl.plot(self.pathX, self.pathY,'r-',linewidth=1)
         pl.show( block=False )
+        pl.pause( 0.1 )
+        
 #        self.fig.hold()
 
 
@@ -110,10 +116,8 @@ class map:
 
 
     def computeProbab(self, field):
-	    return 1 - (1/(1 + pl.exp(field)))	
-
-
-
+        return 1 - (1/(1 + pl.exp(field)))	
+    
     def hit(self, field):
         field = field + pl.log(self.p_hit/(1-self.p_hit))
         if (field > self.hit_threshold):
@@ -201,12 +205,14 @@ data, size = get_raw_data_bulk()
 
 Map = map()
 Map.iterateLidar( data[0]["scan"], data[0]["pose"])
-Map.printMap()
+Map.printMap(data[0]["pose"])
 
 for dataset in range(1, size):
     print("dataset: ")
     print(data[dataset]["pose"])
     
     Map.iterateLidar( data[dataset]["scan"], data[dataset]["pose"])
-    Map.update()
+    Map.update(data[dataset]["pose"])
+
+pl.show()
 
