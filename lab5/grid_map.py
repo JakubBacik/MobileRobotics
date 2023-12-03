@@ -18,8 +18,12 @@ def get_raw_data():
 
     return data[dataset]["scan"], data[dataset]["pose"]
 
+
+
 def distancePointToLine(A, B, C, xPoint, yPoint):
     return pl.absolute(A * xPoint + B * yPoint + C) / pl.sqrt(A*A + B*B)
+
+
 
 class map:
     
@@ -27,21 +31,25 @@ class map:
         self.size = 15
         self.resolution = 0.1 
         self.numberOfBox = int(self.size/self.resolution)
-        # self.map = [[0]*self.numberOfBox]*self.numberOfBox
         self.map =  pl.ones((self.numberOfBox, self.numberOfBox))/2
         self.center = int(self.numberOfBox/2)
+
+        self.hit_threshold = 10
+        self.miss_threshold = -10
+        self.p_hit = 0.95
+        self.p_miss = 0.3
+
+        self.sensor_displacement = 0.1
 
 
 
     def printMap(self):
-        pl.imshow(self.map, interpolation="nearest",cmap='Blues')
-        pl.colorbar()
+        pl.imshow(self.map, interpolation="nearest", cmap='Blues', origin='lower')
         pl.show()
-    
 
-
-    def iSM(mi, xt, zt):
-        return log10()
+        prob_map = self.computeProbab(self.map)
+        pl.imshow(prob_map, interpolation="nearest", cmap='Blues', origin='lower')
+        pl.show()
     
 
 
@@ -64,22 +72,22 @@ class map:
 
 
 
-    def iterateLidar(self, dataScan, dataPose):
-        theta = (pl.pi/512 )*(pl.arange(0,512))
+    def iterateLidar(self, dataScan, robot_position):
+        theta = (pl.pi/512 )*(pl.arange(0,512)-256)
         
         for k in range(len(dataScan)):
             if pl.isinf(dataScan[k]) or pl.isnan(dataScan[k]):
                 continue  
 
-            pt = pol2Car(dataScan[k], theta[k], dataPose)
-            self.substractPointsOnLine( pt, dataPose)  
+            sensor_position = sensor_shift( self.sensor_displacement, 0, robot_position)
+
+            pt = pol2Car(dataScan[k], theta[k], sensor_position)
+            self.substractPointsOnLine( pt, sensor_position)  
 
             obstacle_x = int(pt[0]/self.resolution) + self.center
             obstacle_y = int(pt[1]/self.resolution) + self.center
 
-            # self.map[obstacle_x][obstacle_y] += 0.1   
-            #print("X: ", obstacle_x, " Y: ",obstacle_y, " X_r: ",pt[0], " Y_r: ", pt[1], " T: ", theta[k])
-            self.map[obstacle_x][obstacle_y] = 2
+            self.map[obstacle_x][obstacle_y] = self.hit( self.map[obstacle_x][obstacle_y] )
 
         
 
@@ -116,8 +124,6 @@ class map:
         B = start[0] - end[0]
         C = end[0] * start[1] - start[0] * end[1]
 
-        boxes = []
-
         start_box = self.box_coord( start[0], start[1])
         end_box = self.box_coord( end[0], end[1])
 
@@ -125,33 +131,63 @@ class map:
             for y in self.scan_line_range( start_box, end_box, 1):
                 box_pos = self.map_coord(x,y)
                 if ( distancePointToLine( A, B, C, box_pos[0], box_pos[1]) < pl.sqrt(2)/2 * self.resolution):
-                    boxes.append([x,y])
-                    self.map[x][y] -= 0.1
+                    self.map[x][y] = self.miss( self.map[x][y] )
                    
+
+
+    def computeProbab(self, field):
+	    return 1 - (1/(1 + pl.exp(field)))	
+
+
+
+    def hit(self, field):
+        field = field + pl.log(self.p_hit/(1-self.p_hit))
+        if (field > self.hit_threshold):
+            field = self.hit_threshold
+        return field
+
+	    
+	    
+    def miss(self, field):
+        field = field + pl.log(self.p_miss/(1-self.p_miss))
+        if (field < self.miss_threshold):
+            field = self.miss_threshold
+        return field
+
+
+    def get_xy(self, scan_data, robot_position):
+        x = [] 
+        y = []
+
+        sensor_position = pol2Car( self.sensor_displacement, 0, robot_position)
+
+        theta = (pl.pi/512 )*(pl.arange(0,512)-256)  # angle in radians
+
+        for i in range(0, 512):
+            x.append( scan_data[i] * cos(-theta[i]+robot_position[2]) + sensor_position[0])
+            y.append( scan_data[i] * sin(-theta[i]+robot_position[2]) + sensor_position[1])
+
+        return x, y
 
 
 
 
 
 def pol2Car(r, theta, pose):
-    x = r * cos(theta-pose[2]) + pose[0]
-    y = r * sin(theta-pose[2]) + pose[1]
+    x = r * cos(-theta+pose[2]) + pose[0]
+    y = r * sin(-theta+pose[2]) + pose[1]
     point = pl.matrix([[x],[y]])
     return point
 
 
 
-def get_xy(scan_data, robot_position):
-    x = [] 
-    y = []   
+def sensor_shift(r, theta, pose):
+    x = r * cos(-theta+pose[2]) + pose[0]
+    y = r * sin(-theta+pose[2]) + pose[1]
+    return [x, y, pose[2]]
 
-    theta = (pl.pi/512 )*(pl.arange(0,512)-256)  # angle in radians
 
-    for i in range(0, 512):
-        x.append(scan_data[i] * cos(-theta[i]+robot_position[2]) + robot_position[0])
-        y.append(scan_data[i] * sin(-theta[i]+robot_position[2]) + robot_position[1])
 
-    return x, y
 
 
 
@@ -161,16 +197,8 @@ def get_xy(scan_data, robot_position):
 dataScan, dataPose = get_raw_data()
 print(dataPose)
 
-x, y = get_xy(dataScan, dataPose)
-
-#pl.plot(x, y, 'r.', markersize = 1)#, color='green')
-#pl.xlabel('x')
-#pl.ylabel('y')
-#pl.axis('equal')
-#pl.show()
 
 Map = map()
-# Map.something(dataScan, dataPose)
 Map.iterateLidar(dataScan, dataPose)
 Map.printMap()
 
