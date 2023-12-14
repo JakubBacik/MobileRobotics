@@ -24,7 +24,7 @@ class drive_map:
         self.center = int(self.numberOfBox/2)
         
         self.obstacle_threshold = 0.9
-        self.start_position = [9, 13]
+        self.start_position = [10, 13]
         self.end_position = [15, 25]
 
         self.drive_map = -pl.ones((self.numberOfBox, self.numberOfBox))
@@ -67,8 +67,9 @@ class drive_map:
                             x_s = x + diff[dir][0]
                             y_s = y + diff[dir][1]
                             
-                            if( x_s < self.numberOfBox and x_s >= 0 and y_s < self.numberOfBox and y_s >= 0 and self.path_map[x_s][y_s] == -1):
-                                self.path_map[x_s][y_s] = d + 1
+                            if( x_s < self.numberOfBox and x_s >= 0 and y_s < self.numberOfBox and y_s >= 0 ):
+                                if( self.path_map[x_s][y_s] == -1):
+                                    self.path_map[x_s][y_s] = d + 1
                 
 
     def path_finding(self):
@@ -88,14 +89,16 @@ class drive_map:
         for d in range(0, 2*self.numberOfBox):
             x_path.append(x)
             y_path.append(y)
+            
             if(self.end_position[1] == x and self.end_position[0] == y):
                 break
+
             for dir in range(0,4):
                 x_s = x + diff[dir][0]
                 y_s = y + diff[dir][1]
 
-                if( x_s <= self.numberOfBox and x_s >= 0 and y_s <= self.numberOfBox and y_s >= 0 and self.path_map[x_s][y_s] !=123456):
-                    if( self.start_value >= self.path_map[x_s][y_s]):
+                if( x_s <= self.numberOfBox and x_s >= 0 and y_s <= self.numberOfBox and y_s >= 0 ):
+                    if( self.start_value >= self.path_map[x_s][y_s] and self.path_map[x_s][y_s] !=123456 ):
                         x_p = x_s
                         y_p = y_s
                         self.start_value = self.path_map[x_s][y_s]
@@ -146,5 +149,5 @@ pl.plot(map.end_position[0], map.end_position[1],'go',linewidth=1)
 pl.text(map.start_position[0]-0.5, map.start_position[1]+0.5, 'Start', fontsize=5)
 pl.text(map.end_position[0]-0.5, map.end_position[1]+0.5, 'End', fontsize=5)
 pl.show( )
-pl.pause( 1.0 )
+pl.pause( 0.1 )
 
