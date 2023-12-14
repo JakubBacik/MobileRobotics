@@ -8,7 +8,7 @@ import sys
 class map:
     
     def __init__(self):
-        self.size = 15
+        self.size = 17
         self.resolution = 0.05
         self.numberOfBox = int(self.size/self.resolution)
         self.map =  pl.ones((self.numberOfBox, self.numberOfBox))/2
@@ -57,7 +57,8 @@ class map:
                 continue  
 
             pt = pol2Car(dataScan[k], theta[k], sensor_position)
-            self.substractPointsOnLineBlindOptimized( pt, sensor_position)  
+#            self.substractPointsOnLine( pt, sensor_position)  
+            self.ray_trace( pt, sensor_position)
 
             obstacle = self.box_coord(pt[0], pt[1])
 
@@ -103,18 +104,18 @@ class map:
         start_box = self.box_coord( start[0], start[1])
         end_box = self.box_coord( end[0], end[1])
 
-        hits = 0
-        boxes_analyzed = 0
+#        hits = 0
+#        boxes_analyzed = 0
         
         for x in self.scan_line_range( start_box, end_box, 0):
             for y in self.scan_line_range( start_box, end_box, 1):
                 box_pos = self.map_coord(x,y)
-                boxes_analyzed = boxes_analyzed + 1
+#                boxes_analyzed = boxes_analyzed + 1
                 if ( distancePointToLine( A, B, C, box_pos[0], box_pos[1]) < pl.sqrt(2)/2 * self.resolution):
                     self.map[y][x] = self.miss( self.map[y][x] )
-                    hits = hits + 1
+#                    hits = hits + 1
 
-        print( f'Total analyzed: {boxes_analyzed}  Hits: {hits} dx: {dx}  dy: {dy}')
+#        print( f'Total analyzed: {boxes_analyzed}  Hits: {hits} dx: {dx}  dy: {dy}')
 
 
 
@@ -127,113 +128,116 @@ class map:
         
 
 
-    def substractPointsOnLineBlindOptimized(self, end, start):
+    def ray_trace(self, end, start):
         A = end[1] - start[1]
         B = start[0] - end[0]
         C = end[0] * start[1] - start[0] * end[1]
 
+        dist_den = pl.sqrt(A*A + B*B)
+
         start_box = self.box_coord( start[0], start[1])
         end_box = self.box_coord( end[0], end[1])
 
-        hits = 0
-        boxes_analyzed = 0
-#        threshold = pl.sqrt(2)/2 * self.resolution
-        threshold = 1/2 * self.resolution
+#        hits = 0
+#        boxes_analyzed = 0
+        threshold = pl.sqrt(2)/2 * self.resolution
+#        threshold = 1/2 * self.resolution
         run = 1
 
         x = start_box[0]
         y = start_box[1]
 
-        dx = end_box[0] - start_box[0]
-        dy = end_box[1] - start_box[1]
-        
-        while( run and x < self.numberOfBox and y < self.numberOfBox ):
-            center_hit = 0
-            r_hit = 0
-            l_hit = 0
+        dx = end_box[0] - x
+        dy = end_box[1] - y
 
-            if( abs(dx) >= abs(dy) ):
+
+        if( abs(dx) >= abs(dy) ):
+            for x in self.scan_line_range( start_box, end_box, 0):
+                center_hit = 0
+                r_hit = 0
+                l_hit = 0
+
                 x_r = x
                 y_r = y + 1
                 x_l = x
                 y_l = y - 1
-            else:
+                
+                real_x = (x - self.center) * self.resolution
+                real_y = (y - self.center) * self.resolution
+                center_hit = (abs( A*real_x + B*real_y + C) / dist_den) < threshold
+#                boxes_analyzed = boxes_analyzed + 1
+
+                if( x_r < self.numberOfBox and x_r >= 0 and y_r < self.numberOfBox and y_r >= 0 ):
+                    real_x_r = (x_r - self.center) * self.resolution
+                    real_y_r = (y_r - self.center) * self.resolution
+                    r_hit = (abs( A*real_x_r + B*real_y_r + C) / dist_den) < threshold
+#                    boxes_analyzed = boxes_analyzed + 1
+                    if( r_hit ):
+                        self.map[y_r][x_r] = self.miss( self.map[y_r][x_r] )
+#                       hits = hits + 1
+
+                if( x_l < self.numberOfBox and x_l >= 0 and y_l < self.numberOfBox and y_l >= 0 ):
+                    real_x_l = (x_l - self.center) * self.resolution
+                    real_y_l = (y_l - self.center) * self.resolution
+                    l_hit = (abs( A*real_x_l + B*real_y_l + C) / dist_den) < threshold
+# boxes_analyzed = boxes_analyzed + 1
+                    if( l_hit ):
+                        self.map[y_l][x_l] = self.miss( self.map[y_l][x_l] )
+    #                    hits = hits + 1
+
+                if( center_hit ):
+                    self.map[y][x] = self.miss( self.map[y][x] )
+#                    hits = hits + 1
+                elif( r_hit ):
+                    y = y_r
+                elif( l_hit ):
+                    y = y_l
+
+
+        else:
+            for y in self.scan_line_range( start_box, end_box, 1):
+                center_hit = 0
+                r_hit = 0
+                l_hit = 0
+                
                 x_r = x + 1
                 y_r = y
                 x_l = x - 1
                 y_l = y
 
-            box_pos = self.map_coord(x,y)
-            center_hit = distancePointToLine( A, B, C, box_pos[0], box_pos[1]) < threshold
+                real_x = (x - self.center) * self.resolution
+                real_y = (y - self.center) * self.resolution
+                center_hit = (abs( A*real_x + B*real_y + C) / dist_den) < threshold
+#                boxes_analyzed = boxes_analyzed + 1
 
-            boxes_analyzed = boxes_analyzed + 1
-
-            if( x_r < self.numberOfBox and x_r >= 0 and y_r < self.numberOfBox and y_r >= 0 ):
-                r_box_pos = self.map_coord(x_r,y_r)
-                r_hit = distancePointToLine( A, B, C, r_box_pos[0], r_box_pos[1]) < threshold
-                boxes_analyzed = boxes_analyzed + 1
-
-            if( x_l < self.numberOfBox and x_l >= 0 and y_l < self.numberOfBox and y_l >= 0 ):
-                l_box_pos = self.map_coord(x_l,y_l)
-                l_hit = distancePointToLine( A, B, C, l_box_pos[0], l_box_pos[1]) < threshold
-                boxes_analyzed = boxes_analyzed + 1
-
-            #print( f'Dc: {center_hit}  Dl: {l_hit} Dr: {r_hit}')
-#            print( f'x: {x}  y: {y} x_l: {x_l}  y_l: {y_l}  x_r: {x_r}  y_r: {y_r}')
-
-
-            if( center_hit ):
-                self.map[y][x] = self.miss( self.map[y][x] )
-                hits = hits + 1
-
-            if( l_hit ):
-                self.map[y_l][x_l] = self.miss( self.map[y_l][x_l] )
-                hits = hits + 1
-
-            if( r_hit ):
-                self.map[y_r][x_r] = self.miss( self.map[y_r][x_r] )
-                hits = hits + 1
-
-            if( abs(dx) >= abs(dy) ):
-                x = int(x + copysign(1, dx))
-                if( x == end_box[0] ):
-                    run = 0
-                if( not center_hit ):
+                if( x_r < self.numberOfBox and x_r >= 0 and y_r < self.numberOfBox and y_r >= 0 ):
+                    real_x_r = (x_r - self.center) * self.resolution
+                    real_y_r = (y_r - self.center) * self.resolution
+                    r_hit = (abs( A*real_x_r + B*real_y_r + C) / dist_den) < threshold
+#                    boxes_analyzed = boxes_analyzed + 1
                     if( r_hit ):
-                        y = y_r
-                    elif( l_hit ):
-                        y = y_l
-                    else:
-                        run = 0
-            else:
-                y = int(y + copysign(1, dy))
-                if( y == end_box[1] ):
-                    run = 0
-                if( not center_hit ):
-                    if( r_hit ):
-                        x = x_r
-                    elif( l_hit ):
-                        x = x_l
-                    else:
-                        run = 0
-                
+                        self.map[y_r][x_r] = self.miss( self.map[y_r][x_r] )
+#                       hits = hits + 1
+
+                if( x_l < self.numberOfBox and x_l >= 0 and y_l < self.numberOfBox and y_l >= 0 ):
+                    real_x_l = (x_l - self.center) * self.resolution
+                    real_y_l = (y_l - self.center) * self.resolution
+                    l_hit = (abs( A*real_x_l + B*real_y_l + C) / dist_den) < threshold
+# boxes_analyzed = boxes_analyzed + 1
+                    if( l_hit ):
+                        self.map[y_l][x_l] = self.miss( self.map[y_l][x_l] )
+    #                    hits = hits + 1
+
+                if( center_hit ):
+                    self.map[y][x] = self.miss( self.map[y][x] )
+#                    hits = hits + 1
+                elif( r_hit ):
+                    x = x_r
+                elif( l_hit ):
+                    x = x_l
 
 
-
-        print( f'Total analyzed: {boxes_analyzed}  Hits: {hits} dx: {dx}  dy: {dy}')
-
-
-
-
-
-
-
-
-
-
-
-
-
+#        print( f'Total analyzed: {boxes_analyzed}  Hits: {hits} dx: {dx}  dy: {dy}')
 
 
 
@@ -244,6 +248,8 @@ class map:
     def computeProbab(self, field):
         return 1 - (1/(1 + pl.exp(field)))	
     
+
+
     def hit(self, field):
         field = field + pl.log(self.p_hit/(1-self.p_hit))
         if (field > self.hit_threshold):
@@ -307,7 +313,7 @@ def get_raw_data_bulk():
 
 
 def distancePointToLine(A, B, C, xPoint, yPoint):
-    return pl.absolute(A * xPoint + B * yPoint + C) / pl.sqrt(A*A + B*B)
+     return abs(A * xPoint + B * yPoint + C) / pl.sqrt(A*A + B*B)
 
 
 
@@ -321,7 +327,7 @@ Map.printMap(data[0]["pose"])
 
 for dataset in range(1, size):
 #    input()
-    print(f'dataset: {dataset}/{size}')
+    print(f'dataset: {dataset+1}/{size}')
     print('Pose: ', data[dataset]["pose"])
     
     Map.iterateLidar( data[dataset]["scan"], data[dataset]["pose"])
