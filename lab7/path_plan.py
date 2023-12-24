@@ -12,7 +12,7 @@ class path_map:
     
     
     def __init__(self):
-        self.size = 40
+        self.size = 50
         self.resolution = 0.1
         self.numberOfBox = int(self.size/self.resolution)
         self.map =  pl.ones((self.numberOfBox, self.numberOfBox))/2

@@ -10,27 +10,18 @@ from drive_map import drive_map
 from path_plan import path_map
 from data_subscriber import DataSubscriber
 from path_plan import get_raw_data_bulk
+from robot_controller import VelocityPublisher
+from robot_controller import Controller
+from robot_controller import Odometry_DataSubscriber
 
-    
-
-
-# if __name__ == "__main__":
-#     path = path_from_data()
-#     print(path[0])
-#     print(path[1])
-
-#     pl.plot(path[1], path[0],'r-',linewidth=1)
-#     pl.show( )
-#     pl.pause( 0.1 )
-
-#     path_len = len(path[0])
-#     for i in range(0, path_len-1):
-#         if( path[0][i] == path[0][i]):
-#             if( path[1][i+1] < path[1][i]):
-#                 set_dir()
 global path123
 
-        
+
+def map_coord(x, y, Map ):
+    real_x = (x*Map.filter_size - Map.center) * Map.resolution
+    real_y = (y*Map.filter_size - Map.center) * Map.resolution
+    return [real_x, real_y, 0]
+ 
 def box_coord(x, y, Map ):
     box_x = int( x / Map.resolution) + Map.center
     box_y = int( y / Map.resolution) + Map.center
@@ -47,15 +38,18 @@ def read_from_input():
 
 def main(args=None):
     global path123
-    path123=[2, 2]
+    path123=[70, 60]
     rclpy.init()
     data_sub = DataSubscriber()
+    velocity_publisher = VelocityPublisher()
+    Odometry = Odometry_DataSubscriber()
 
     Map = path_map()
     Drive_map = drive_map()
 
     executor = rclpy.executors.MultiThreadedExecutor()
     executor.add_node(data_sub)
+    executor.add_node(Odometry)
     read_from_input_thread = threading.Thread(target=read_from_input, daemon=True)
     executor_thread = threading.Thread(target=executor.spin, daemon=True)
     executor_thread.start()
@@ -82,9 +76,11 @@ def main(args=None):
     Drive_map.calculate_dists()
     Drive_map.print_path_map()
     
-    destination = [23,15]
+    destination = [3,2]
+    destination_of = []
     read_from_input_thread.start()
     try:
+        i = 0
         while rclpy.ok(): 
             position = [data_sub.pose[0], data_sub.pose[1], data_sub.pose[2]]        
             Map.iterateLidar( data_sub.lidar_buf[103:615].tolist(), position)
@@ -98,9 +94,11 @@ def main(args=None):
             Drive_map.set_end_position(path123)
             current_pos = box_coord(position[0], position[1], Map)
             Drive_map.set_start_position([current_pos[0], current_pos[1]])
+            
 
             Drive_map.calculate_dists()
             Drive_map.update_path_map()
+            
             
             ax.cla()
             ax.set_xlim(0, Drive_map.numberOfBox-1)
@@ -111,12 +109,32 @@ def main(args=None):
             Drive_map.draw_path()
 
 
- 
+            if(len(Drive_map.path[0])>2 ):
+                print("halo")
+                if i==0:
+                    destination_of = map_coord(Drive_map.path[1][1], Drive_map.path[0][1], Map)
+                controller = Controller(Odometry.pose, destination_of)
+                with open('somefile.txt', 'a') as the_file:
+                    the_file.write(str(Odometry.pose) + " | " + str(destination_of) + "\n" )
+                if( not controller.isArrived()):
+                    i=1
+                    destination_of = map_coord(Drive_map.path[1][1], Drive_map.path[0][1], Map)
+                    print(str(Odometry.pose) + " | " + str(destination_of) + "\n" )
+                    print("not yet")
+                    v, w = controller.iteratePID()
+                    velocity_publisher.publish_velocity(v, w)
+                else:
+                    print(str(Odometry.pose) + " | " + str(destination_of) + "\n" )
+                    print("end")
+                    velocity_publisher.publish_velocity(0.0, 0.0)
+
+
             rate.sleep()
         pl.show()
     except KeyboardInterrupt:
         pass
-
+    velocity_publisher.publish_velocity(0.0, 0.0)
+    velocity_publisher.destroy_node()
     rclpy.shutdown()
     read_from_input_thread.join()
     executor_thread.join()

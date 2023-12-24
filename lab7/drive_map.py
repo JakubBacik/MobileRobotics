@@ -14,7 +14,7 @@ class drive_map:
     
     
     def __init__(self):
-        self.size = 40
+        self.size = 50
         self.resolutionSmall = 0.1
         self.numberOfBoxSmall = int(self.size/self.resolutionSmall)
 
@@ -28,7 +28,7 @@ class drive_map:
         
         self.obstacle_threshold = 0.9
         self.start_position = [1, 1]
-        self.end_position = [15, 25]
+        self.end_position = [3, 3]
 
         self.drive_map = -pl.ones((self.numberOfBox, self.numberOfBox))
         self.path_map = -pl.ones((self.numberOfBox, self.numberOfBox))
