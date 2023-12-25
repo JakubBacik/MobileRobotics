@@ -11,8 +11,10 @@ from path_plan import path_map
 from data_subscriber import DataSubscriber
 from path_plan import get_raw_data_bulk
 from robot_controller import VelocityPublisher
-from robot_controller import Controller
 from robot_controller import Odometry_DataSubscriber
+from pid import PID
+from robot_controller import RobotController
+from matplotlib import pyplot as plt
 
 global path123
 
@@ -37,8 +39,9 @@ def read_from_input():
     
 
 def main(args=None):
+    pathsize = 0
     global path123
-    path123=[70, 60]
+    path123=[40, 40]
     rclpy.init()
     data_sub = DataSubscriber()
     velocity_publisher = VelocityPublisher()
@@ -50,6 +53,7 @@ def main(args=None):
     executor = rclpy.executors.MultiThreadedExecutor()
     executor.add_node(data_sub)
     executor.add_node(Odometry)
+    executor.add_node(velocity_publisher)
     read_from_input_thread = threading.Thread(target=read_from_input, daemon=True)
     executor_thread = threading.Thread(target=executor.spin, daemon=True)
     executor_thread.start()
@@ -59,7 +63,6 @@ def main(args=None):
     while data_sub.lidar_buf == 0:
         rate.sleep()
 
-    
     pl.subplot(1, 3, 1)
     position = [data_sub.pose[0], data_sub.pose[1], data_sub.pose[2]]
     Map.iterateLidar( data_sub.lidar_buf[103:615].tolist(), position)
@@ -79,8 +82,15 @@ def main(args=None):
     destination = [3,2]
     destination_of = []
     read_from_input_thread.start()
+    i = 0
+    controller = RobotController(Kp=7.0, Ki=0.5, Kd=0.01, dt=0.1, arrive_distance=0.1, angle_distance=0.1, desiredV=0.1)
+    controller.current = [Odometry.pose[0], Odometry.pose[1], Odometry.pose[2]]  # x, y, angle 
+  
+
     try:
-        i = 0
+        j = 0
+        i = 1
+        old_pathsize = 0
         while rclpy.ok(): 
             position = [data_sub.pose[0], data_sub.pose[1], data_sub.pose[2]]        
             Map.iterateLidar( data_sub.lidar_buf[103:615].tolist(), position)
@@ -106,31 +116,72 @@ def main(args=None):
             Drive_map.print_path_map()
 
             Drive_map.path_finding()
+            Drive_map.calculate_angle()
             Drive_map.draw_path()
+            velocity_publisher.publish_velocity(0.0, 0.2) 
+
+            # pathsize = len(Drive_map.path[0])
+            # if  pathsize == old_pathsize:
+            #     i+=1
+            # else:
+            #     i=1
+            
+            
+            # print("halo")
+
+            # if(j > 2):
+            #     while True:                  
+            #         controller.current = [Odometry.pose[0], Odometry.pose[1], Odometry.pose[2]] 
+            #         controller.goal = map_coord(Drive_map.path[1][i], Drive_map.path[0][i], Map)
+
+            #         v, w = controller.iteratePID()
+
+            #         # Calculate the angle error
+            #         error_x = controller.goal[0] - controller.current[0]
+            #         error_y = controller.goal[1] - controller.current[1]
+            #         # print(controller.goal[0], ' ', controller.goal[1])
+            #         # print(Odometry.pose)
+            #         error_angle = np.arctan2(error_y, error_x) - controller.current[2]
+
+            #         # Wrap the angle error to the range [-pi, pi]
+            #         error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
+            #         flag = 0
+            #         # If the absolute value of the angle error is greater than pi/2, make a U-turn
+            #         if abs(error_angle) > np.pi / 2.8:
+            #             flag =1
+            #             print("Making a U-turn")
+            #             v= 0.0
+            #             w = np.sign(w)#* controller.desiredV  # Use the maximum angular velocity for the U-turn
+                        
+
+            #         if flag == 0:
+            #             velocity_publisher.publish_velocity(v, w)  
+            #             rate.sleep()
+            #         else:
+            #             velocity_publisher.publish_velocity(v, w)
+            #             time.sleep(1)
+            #             flag=0
+                    
+            #         print(controller.goal[0], ' ', controller.goal[1], controller.goal[2])
+            #         print(Odometry.pose) 
+            #         distance_to_goal = np.sqrt((controller.goal[0] - controller.current[0])**2 + (controller.goal[1] - controller.current[1])**2)
+            #         if distance_to_goal < controller.arrive_distance:
+            #             velocity_publisher.publish_velocity(0.0, 0.0) 
+            #             rate.sleep()
+            #             old_pathsize = pathsize
+            #             print(f"===================================================== {i}")
+            #             break
+                        
+            
+            #         if i == len(Drive_map.path)-1:
+            #             print("end of path")
+            #             break
+                    
+            # j = j+1
 
 
-            if(len(Drive_map.path[0])>2 ):
-                print("halo")
-                if i==0:
-                    destination_of = map_coord(Drive_map.path[1][1], Drive_map.path[0][1], Map)
-                controller = Controller(Odometry.pose, destination_of)
-                with open('somefile.txt', 'a') as the_file:
-                    the_file.write(str(Odometry.pose) + " | " + str(destination_of) + "\n" )
-                if( not controller.isArrived()):
-                    i=1
-                    destination_of = map_coord(Drive_map.path[1][1], Drive_map.path[0][1], Map)
-                    print(str(Odometry.pose) + " | " + str(destination_of) + "\n" )
-                    print("not yet")
-                    v, w = controller.iteratePID()
-                    velocity_publisher.publish_velocity(v, w)
-                else:
-                    print(str(Odometry.pose) + " | " + str(destination_of) + "\n" )
-                    print("end")
-                    velocity_publisher.publish_velocity(0.0, 0.0)
-
-
-            rate.sleep()
-        pl.show()
+            # rate.sleep()
+        
     except KeyboardInterrupt:
         pass
     velocity_publisher.publish_velocity(0.0, 0.0)

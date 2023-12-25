@@ -8,7 +8,7 @@ import sys
 class grid_map:
     
     def __init__(self):
-        self.size = 50
+        self.size = 25
         self.resolution = 0.05
         self.numberOfBox = int(self.size/self.resolution)
         self.map =  pl.ones((self.numberOfBox, self.numberOfBox))/2

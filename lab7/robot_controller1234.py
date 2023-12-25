@@ -198,10 +198,10 @@ def main(args=None):
   rate = Odometry.create_rate(10)
 
   i = 0
-  controller = RobotController(Kp=7.0, Ki=0.3, Kd=0.02, dt=0.05, arrive_distance=0.1, angle_distance=0.1, desiredV=0.1)
+  controller = RobotController(Kp=7.0, Ki=0.5, Kd=0.05, dt=0.1, arrive_distance=0.1, angle_distance=0.1, desiredV=0.1)
   controller.current = [Odometry.pose[0], Odometry.pose[1], Odometry.pose[2]]  # x, y, angle
-  # goals = [[0.0, 0.0, 0.0],[1.0, 0.0, np.pi/2],[1.0,1.0,0.0],[2.0,1.0,0],[3.0,1.0, -np.pi/2],[3.0, 0.0, -np.pi],[2.0, 0.0, -np.pi/2],[2.0, -1.0, np.pi],[1.0, -1.0, np.pi],[0.0, -1.0, np.pi/2],[0.0, 0.0, np.pi/2],[0.0, 1.0, -np.pi],[-1.0, 1.0, -np.pi/2],[-1.0,0.0, -np.pi],[-2.0, 0.0, -np.pi]]
-  goals= [[0.0, 0.0, 0.0], [0.0, 1.0, 1.0], [0.0, 2.0, 2.0], [2.0, 1.0, 3.0]]
+  goals = [[0.0, 0.0, 0.0],[1.0, 0.0, np.pi/2],[1.0,1.0,0.0],[2.0,1.0,0],[3.0,1.0, -np.pi/2],[3.0, 0.0, -np.pi],[2.0, 0.0, -np.pi/2],[2.0, -1.0, np.pi],[1.0, -1.0, np.pi],[0.0, -1.0, np.pi/2],[0.0, 0.0, np.pi/2],[0.0, 1.0, -np.pi],[-1.0, 1.0, -np.pi/2],[-1.0,0.0, -np.pi],[-2.0, 0.0, -np.pi]]
+  #goals= [[0.0, 0.0, 0.0], [0.0, 1.0, 1.0], [0.0, 2.0, 2.0], [2.0, 1.0, 3.0]]
   angle = calculate_angle(goals)
   angle.append(angle[-1])
   for h in range(len(goals)):

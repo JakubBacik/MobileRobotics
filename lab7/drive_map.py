@@ -1,6 +1,7 @@
 import json
 import pylab as pl
 import argparse
+import numpy as np
 from math import cos, sin, log10
 import sys
 import numpy as np
@@ -14,7 +15,7 @@ class drive_map:
     
     
     def __init__(self):
-        self.size = 50
+        self.size = 25
         self.resolutionSmall = 0.1
         self.numberOfBoxSmall = int(self.size/self.resolutionSmall)
 
@@ -29,11 +30,13 @@ class drive_map:
         self.obstacle_threshold = 0.9
         self.start_position = [1, 1]
         self.end_position = [3, 3]
+        self.start_angle = 0
 
         self.drive_map = -pl.ones((self.numberOfBox, self.numberOfBox))
         self.path_map = -pl.ones((self.numberOfBox, self.numberOfBox))
 
         self.path = []
+        self.angle= []
 
     def set_start_position(self, start_position):
         self.start_position = start_position
@@ -102,17 +105,21 @@ class drive_map:
 
         x = self.start_position[1]
         y = self.start_position[0]
+        theta = 0
 
         x_p = 0
         y_p = 0
+
         x_path = []
         y_path = []
+        theta_path = []
 
         self.start_value = self.path_map[x][y]
 
         for d in range(0, 2*self.numberOfBox):
             x_path.append(x)
             y_path.append(y)
+            theta_path.append(theta)
             
             if(self.end_position[1] == x and self.end_position[0] == y):
                 break
@@ -125,14 +132,43 @@ class drive_map:
                     if( self.start_value >= self.path_map[x_s][y_s] and self.path_map[x_s][y_s] !=123456 ):
                         x_p = x_s
                         y_p = y_s
+                            
                         self.start_value = self.path_map[x_s][y_s]
 
             x = x_p
             y = y_p
         
         self.path = [x_path, y_path]    
-                            
-                            
+
+
+    def normalize_angle(self, angle):
+        while angle > 180:
+            angle -= 360
+        while angle < -180:
+            angle += 360
+        return angle        
+                         
+    def calculate_angle(self):
+        path = self.path
+        theta123 = 0
+        theta1 = 0
+        angle_tab = []
+
+        for i in range(len(path[0])-1):
+            theta123 = np.degrees(np.arctan2(path[1][i+1] - path[1][i], path[0][i+1] - path[0][i]))
+            diff = self.normalize_angle(theta123 - theta1)
+            if diff != 0:
+                theta1 = theta123
+                if diff > 0:
+                    angle_tab.append(np.pi/2)
+                else:
+                    angle_tab.append(-np.pi/2)
+            else:
+                angle_tab.append(0.0)
+
+        self.angle = angle_tab
+
+                          
 
                         
 

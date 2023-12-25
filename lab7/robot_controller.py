@@ -7,26 +7,17 @@ from nav_msgs.msg import Odometry
 import numpy as np              
 import threading
  
-class Controller():
-  def __init__(
-          self, start_, goal_, 
-          kP=0.5, kI=0.02, kD=0.01, dT=0.1, v=0.1,
-          arrive_distance=0.1):
-
-      self.current = start_
-      self.goal = goal_
-
-      self.E = 0   # Cummulative error
-      self.old_e = 0  # Previous error
-
-      self.Kp = kP
-      self.Ki = kI
-      self.Kd = kD
-
-      self.desiredV = v
-      self.dt = dT  # in second
+class RobotController:
+  def __init__(self, Kp, Ki, Kd, dt, arrive_distance, angle_distance, desiredV):
+      self.Kp = Kp
+      self.Ki = Ki
+      self.Kd = Kd
+      self.dt = dt
       self.arrive_distance = arrive_distance
-
+      self.angle_distance = angle_distance
+      self.desiredV = desiredV
+      self.E = 0
+      self.old_e = 0
 
   def iteratePID(self):
       # Difference in x and y
@@ -35,40 +26,39 @@ class Controller():
 
       # Angle from robot to goal
       g_theta = np.arctan2(d_y, d_x)
+      #g_theta = self.goal[2]
 
       # Error between the goal angle and robot angle
       alpha = g_theta - self.current[2]
-      # alpha = g_theta - math.radians(90)
       e = np.arctan2(np.sin(alpha), np.cos(alpha))
 
       e_P = e
       e_I = self.E + e
       e_D = e - self.old_e
 
-      # This PID controller only calculates the angular
-      # velocity with constant speed of v
-      # The value of v can be specified by giving in parameter or
-      # using the pre-defined value defined above.
+      # Angular velocity
       w = self.Kp*e_P + self.Ki*e_I + self.Kd*e_D
-
       w = np.arctan2(np.sin(w), np.cos(w))
 
       self.E = self.E + e
       self.old_e = e
-      v = self.desiredV
+
+     # Linear velocity
+      distance = np.sqrt(d_x**2 + d_y**2)
+      if distance > 1:
+          v = 5*self.desiredV
+      elif distance > 0.5:
+          v = self.desiredV
+      elif distance > 0.1:
+          v = 0.5*self.desiredV
+      elif distance > 0.05:
+          v = 0.2*self.desiredV
+      else:
+          v = 0.0 
+      #v = self.desiredV if distance > self.arrive_distance else 0.0
+
 
       return v, w
-
-
-  def isArrived(self):
-      current_state = [self.current[0], self.current[1]]
-      goal_state = [self.goal[0], self.goal[1]]
-
-      distance_err = math.dist(current_state, goal_state)
-      if distance_err < self.arrive_distance:
-          return True
-      else:
-          return False
 
 
 class Odometry_DataSubscriber(Node):
@@ -100,7 +90,7 @@ class Odometry_DataSubscriber(Node):
       self.pose[0] = msg.pose.pose.position.x
       self.pose[1] = msg.pose.pose.position.y    
       self.pose[2] = self.euler_from_quaternion(msg.pose.pose.orientation)[2]
-      
+
 class VelocityPublisher(Node):
   def __init__(self):
     super().__init__('Velocity_Publisher')
@@ -114,4 +104,3 @@ class VelocityPublisher(Node):
     self.publisher_.publish(velocity_command)
     # self.get_logger().info('Published velocity command: linear={}, angular={}'.format(
     #     velocity_command.linear.x, velocity_command.angular.z))       
-        
