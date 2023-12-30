@@ -22,7 +22,6 @@ class PID_linear:
 
       # Angle from robot to goal
       g_theta = np.arctan2(d_y, d_x)
-
       # Error between the goal angle and robot angle
       alpha = g_theta - self.current[2]
       e = np.arctan2(np.sin(alpha), np.cos(alpha))
@@ -40,16 +39,16 @@ class PID_linear:
 
       # Linear velocity
       distance = np.sqrt(d_x**2 + d_y**2)
-      if distance > 0.5:
-          v = 5*self.desiredV
+      if distance > 0.8:
+          v = 2*self.desiredV
       elif distance > 0.3:
           v = self.desiredV
       elif distance > 0.1:
-          v = 0.5*self.desiredV
+          v = 1*self.desiredV
       else:
+          w=0.0
           v = 0.0 
       #v = self.desiredV if distance > self.arrive_distance else 0.0
-
       return v, w
 
 '''
