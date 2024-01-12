@@ -5,22 +5,25 @@ import numpy as np
 
 from pixellate_map import pixellate_map
 from grid_map import grid_map
-from pid import PID_linear, PID_angular
+from pid import PID_linear, PID_angular, PID
 from publisher_subscriber_ros import odometry_node, velocity_node, laser_node
 from additional_function import map_coord, box_coord
 from matplotlib import pyplot as plt
 
 global end_of_robot_position
+global angle123
 global list_of_path
 global list_of_angle
 
 def read_from_input():
     global end_of_robot_position
+    global angle123
     print("To change the path, enter the new path in the form: x, y")
     while True:    
         number = input(".")
         number = number.split(' ')
         end_of_robot_position = [int(number[0]), int(number[1])]
+        angle123 = float(number[2])
 
 def init_node():
     laser_raw_data = laser_node()
@@ -34,8 +37,11 @@ def init_node():
 
     return laser_raw_data, velocity_publisher, odom_raw_data, executor
 
-def check_front( laser_raw_data, velocity_publisher, odom_raw_data, rate):
-    if laser_raw_data.lidar_buf[359] < 0.2:
+def check_front( laser_raw_data, threshold = 0.5):
+    dataScan = laser_raw_data.lidar_buf.tolist()
+    dataScan = dataScan[280:360]
+
+    if min(dataScan) < threshold :
         return True
     else:
         return False
@@ -47,9 +53,9 @@ def end_node(laser_raw_data, velocity_publisher, odom_raw_data, executor):
     odom_raw_data.destroy_node()
     laser_raw_data.destroy_node()
 
-def set_correct_angle_position(pid_linear, odom_raw_data, velocity_publisher, rate):
-    angularController = PID_angular(Kp = 8.0, Ki =0.03, Kd=0.0, dt=0.1,  desired_w=2.0)
-    desired_angle = np.arctan2(pid_linear.current[1] - odom_raw_data.pose[1],  pid_linear.current[0]-odom_raw_data.pose[0]) 
+def set_correct_angle_position(current, odom_raw_data, velocity_publisher, rate):
+    angularController = PID(kp = 0.09, ki =0.015, kd=0.01, limit=0.25)
+    desired_angle = np.arctan2(current[1] - odom_raw_data.pose[1],  current[0]-odom_raw_data.pose[0]) 
     angle_tolerance = 0.1
 
     while True:
@@ -61,18 +67,23 @@ def set_correct_angle_position(pid_linear, odom_raw_data, velocity_publisher, ra
         error_angle = desired_angle - current_angle
 
         # Wrap the angle error to the range [-pi, pi]
-        error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
+        if abs(desired_angle - current_angle) > np.pi:
+            if desired_angle > current_angle:
+                desired_angle -= 2 * np.pi
+            else:
+                current_angle -= 2 * np.pi
+
         # If the error is within the tolerance, break the loop
         if abs(error_angle) < angle_tolerance:
             velocity_publisher.publish_velocity(0.0, 0.0)
-            #rate.sleep() 
+            rate.sleep() 
             break
 
         # Calculate angular velocity using the angular controller
-        w = angularController.control(error_angle)
+        w = angularController.calc(error_angle, 0)
 
         velocity_publisher.publish_velocity(0.0, w)
-        #rate.sleep()
+        rate.sleep()
 
 def robot_drive( pid_linear, odom_raw_data, velocity_publisher, rate, laser_raw_data):
     global list_of_path
@@ -140,6 +151,8 @@ def robot_drive( pid_linear, odom_raw_data, velocity_publisher, rate, laser_raw_
 def main(args=None):
     global list_of_path
     global list_of_angle
+    global angle123
+    angle123 = 0.0
     rclpy.init()
 
     laser_raw_data, velocity_publisher, odom_raw_data, executor = init_node() 
@@ -158,7 +171,7 @@ def main(args=None):
         rate.sleep()
     
     global end_of_robot_position
-    end_of_robot_position=[30, 30]
+    end_of_robot_position=[40, 25]
     pl.figure(figsize=(20, 10))
     pl.subplot(1, 3, 1)
     position = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]]
@@ -183,8 +196,6 @@ def main(args=None):
     pid_linear = PID_linear(Kp=15.0, Ki=0.5, Kd=0.05, dt=0.1, arrive_distance=0.1, angle_distance=0.1, desiredV=0.1)
     pid_linear.current = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]]
 
-    velocity_publisher.publish_velocity(0.1, 0.3) 
-    # set_correct_angle_position(pid_linear, odom_raw_data, velocity_publisher, rate)
     path_123 = []
     
     k = 0
@@ -218,78 +229,115 @@ def main(args=None):
             pixellate_map_obj.print_path_map()
 
             pixellate_map_obj.path_finding()
-            pixellate_map_obj.draw_path()
+            pixellate_map_obj.draw_path()  
             print("Robot path  ",pixellate_map_obj.path)
             
-            
+            if k == 2:
+                list_of_path = [map_coord(y, x, grid_map_obj) for x, y in zip(*pixellate_map_obj.path)]  
+                set_correct_angle_position([list_of_path[1][0], list_of_path[1][1]], odom_raw_data, velocity_publisher, rate)
+
+            if k == 0:
+                velocity_publisher.publish_velocity(0.0, 0.0)
 
             if k > 2:
+
                 list_of_path = [map_coord(y, x, grid_map_obj) for x, y in zip(*pixellate_map_obj.path)]  
                 list_of_angle = pixellate_map_obj.calculate_angle(list_of_path)
-                list_of_angle.append(list_of_angle[-1])
+                list_of_angle.append(angle123)
                 
                 print("Robot path box ", list_of_path)
+                print("Robot path angle ", list_of_angle)
                 # robot_drive_thread = threading.Thread(target=robot_drive, args=( pid_linear, odom_raw_data, velocity_publisher, rate, laser_raw_data ), daemon=True)
                 # robot_drive_thread.start()
                 flag =0
+                goals = list_of_path[1]
+                angle = list_of_angle[1] 
+                arrive_distance = 0.09
                 while True:  
+                    if check_front( laser_raw_data, 0.2):  
+                        velocity_publisher.publish_velocity(0.0, 0.0)
+                        print("Obstacle in front of the robot")  
+                        break
+                    goal = goals[0:2]
                     if flag == 1:
                         flag = 0
                         break
 
-                    # if abs(odom_raw_data.pose[0] - list_of_path[1][0]) < 0.2 and abs(odom_raw_data.pose[1] - list_of_path[1][1]) < 0.2:
-                    #     i=2
-                    # else:
-                    #     i=1
-                    
-                    # if(current_pos[0] == pixellate_map_obj.path[1][0] and current_pos[1] == pixellate_map_obj.path[0][0]):
-                    #     print("zmiana")
-                    #     i=2
-                    # else:
-                    #     i=1
                     i=1
 
-                    if check_front( laser_raw_data, velocity_publisher, odom_raw_data, rate):  
-                        velocity_publisher.publish_velocity(0.0, 0.0)    
+                    # if check_front( laser_raw_data, velocity_publisher, odom_raw_data, rate):  
+                    #     velocity_publisher.publish_velocity(0.0, 0.0)    
 
-                    pid_linear.current = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]] 
-                    pid_linear.goal = list_of_path[i] 
-                    pid_linear.goal_angle = list_of_angle[i]
-                    print("set linear ", pid_linear.current , " | " , pid_linear.goal)
+                    current = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]] 
+                    distance_to_goal = np.sqrt((goal[0] - current[0])**2 + (goal[1] - current[1])**2)
+                    linearController = PID(kp = 0.09, ki =0.015, kd=0.001, limit=0.5)
+                    angularController = PID(kp = 0.25, ki =0.020, kd=0.002, limit=4)
+                    d_x = goal[0] - current[0]
+                    d_y = goal[1] - current[1]
 
-                    v, w = pid_linear.iteratePID()
+                    # Angle from robot to goal
+                    desired_angle = np.arctan2(d_y, d_x)
 
-                    velocity_publisher.publish_velocity(v, w) 
+                # ...
+
+                # Calculate the current angle error
                     
+                    current_angle = odom_raw_data.pose[2] 
 
-                    distance_to_goal = np.sqrt((pid_linear.goal[0] - pid_linear.current[0])**2 + (pid_linear.goal[1] - pid_linear.current[1])**2)
+                    
+                    # Handle the discontinuity at -π and π
+                    if abs(desired_angle - current_angle) > np.pi:
+                        if desired_angle > current_angle:
+                            desired_angle -= 2 * np.pi
+                        else:
+                            current_angle -= 2 * np.pi
 
-                    if distance_to_goal < pid_linear.arrive_distance:# or abs(odom_raw_data.pose[2] - list_of_angle[i]) > 2.14:
-                        # angularController = PID_angular(Kp = 10.0, Ki =0.5, Kd=0.2, dt=0.1,  desired_w=30.0 )
-                        # angularController = PID_angular(Kp = 15.0, Ki =0.8, Kd=0.3, dt=0.1,  desired_w=30.0 )
-                        angularController = PID_angular(Kp = 15.0, Ki =0.8, Kd=0.3, dt=0.1,  desired_w=30.0 )
-                        desired_angle = list_of_angle[i]  
+                    # Calculate the difference between the desired and current angles
+                    error_angle = desired_angle - current_angle
+
+                    w = angularController.calc(error_angle, 0)
+                    v = linearController.calc(distance_to_goal, 0)
+
+                    print("seting  goal",i," | ", goal, " >>", current)
+                    velocity_publisher.publish_velocity(v, w) 
+                    rate.sleep()
+
+
+                    if distance_to_goal <  arrive_distance: # or abs(odom_raw_data.pose[2] - list_of_angle[i]) > 2.14:
+
+                        angularController = PID(kp = 0.09, ki =0.015, kd=0.01, limit=0.25)
+                        desired_angle = angle  # Set your desired angle here
                         angle_tolerance = 0.01
-
                         while True:
-                            current_angle = odom_raw_data.pose[2]  
-                            print("set angle123 ",current_angle , " | " ,desired_angle)
+                            # Calculate the current angle error
+                            current_angle = odom_raw_data.pose[2]  # Assuming this is the current angle
                             error_angle = desired_angle - current_angle
-                            error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
+                            print("seting  angle",i," | ", desired_angle, " >>>>", current_angle)
 
 
+                            # Wrap the angle error to the range [-pi, pi]
+                            # error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
+
+                            # Handle the discontinuity at -π and π
+                            if abs(desired_angle - current_angle) > np.pi:
+                                if desired_angle > current_angle:
+                                    desired_angle -= 2 * np.pi
+                                else:
+                                    current_angle -= 2 * np.pi
+
+                            # Calculate the error
+                            error_angle = desired_angle - current_angle
+                            # If the error is within the tolerance, break the loop
                             if abs(error_angle) < angle_tolerance:
                                 velocity_publisher.publish_velocity(0.0, 0.0)
                                 rate.sleep() 
-                                rate.sleep() 
-                                rate.sleep() 
+                                i = i+1
                                 flag = 1
-                                print("flag", flag)
                                 break
 
                             # Calculate angular velocity using the angular controller
-                            w = angularController.control(error_angle)
-
+                            # w = angularController.calc(desired_angle, current_angle)
+                            w = angularController.calc(error_angle, 0)
                             velocity_publisher.publish_velocity(0.0, w) 
                             rate.sleep() 
 

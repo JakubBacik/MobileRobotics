@@ -16,7 +16,7 @@ class pixellate_map():
         self.prob_map =  pl.zeros((self.numberOfBoxSmall, self.numberOfBoxSmall))
         self.center = int(self.numberOfBox/2)
         
-        self.obstacle_threshold = 0.9
+        self.obstacle_threshold = 0.8
         self.start_position = [1, 1]
         self.end_position = [3, 3]
         self.start_angle = 0
@@ -56,13 +56,31 @@ class pixellate_map():
         pl.show(block=False )
 
 
+    # def pixellate_map(self):    
+    #     for x in range(0, self.numberOfBoxSmall, self.filter_size):
+    #         for y in range(0, self.numberOfBoxSmall, self.filter_size): 
+    #             for x_s in range(x, x+self.filter_size):
+    #                 for y_s in range( y, y+self.filter_size):
+    #                     if self.prob_map[x_s][y_s] > self.obstacle_threshold:
+    #                         self.drive_map[int(x/self.filter_size)][int(y/self.filter_size)] = 123456
+
+
     def pixellate_map(self):    
         for x in range(0, self.numberOfBoxSmall, self.filter_size):
-            for y in range(0, self.numberOfBoxSmall, self.filter_size):
-                for x_s in range(x, x+self.filter_size):
-                    for y_s in range( y, y+self.filter_size):
+            for y in range(0, self.numberOfBoxSmall, self.filter_size): 
+                # Initialize a flag to check if there's an obstacle in the current block
+                obstacle_in_block = False
+                for x_s in range(x, min(x+self.filter_size, self.numberOfBoxSmall)):
+                    for y_s in range(y, min(y+self.filter_size, self.numberOfBoxSmall)):
                         if self.prob_map[x_s][y_s] > self.obstacle_threshold:
-                            self.drive_map[int(x/self.filter_size)][int(y/self.filter_size)] = 123456
+                            obstacle_in_block = True
+                            break
+                    if obstacle_in_block:
+                        break
+                # If there's an obstacle in the current block, mark the corresponding cell in the drive_map as an obstacle
+                if obstacle_in_block:
+                    # Round the coordinates to the nearest multiple of self.filter_size before dividing
+                    self.drive_map[round(x/self.filter_size)][round(y/self.filter_size)] = 123456
 
     def clear_drive_map(self):
         self.path_map = -pl.ones((self.numberOfBox, self.numberOfBox))

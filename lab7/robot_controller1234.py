@@ -8,6 +8,7 @@ import numpy as np
 import threading
 from matplotlib import pyplot as plt
 import time
+from publisher_subscriber_ros import laser_node
 
 class RobotController:
   def __init__(self, Kp, Ki, Kd, dt, arrive_distance, angle_distance, desiredV):
@@ -46,8 +47,8 @@ class RobotController:
 
       # Linear velocity
       distance = np.sqrt(d_x**2 + d_y**2)
-      if distance > 0.5:
-          v = 5*self.desiredV
+      if distance > 0.8:
+          v = 3*self.desiredV
       elif distance > 0.3:
           v = self.desiredV
       elif distance > 0.1:
@@ -127,11 +128,13 @@ def calculate_angle(path):
 
     for i in range(len(path)-1):
       angle = np.arctan2(path[i+1][1] - path[i][1], path[i+1][0] - path[i][0])
-      if angle >= 3.1 and  path[i][1] < 0:
-        angle = np.pi
-      elif angle >= 3.1 and path[i][1] > 0:
-        angle = -np.pi
       angle_tab.append(angle)
+
+    # for i in range(1, len(angle_tab)-1):
+    #   if angle_tab[i] >= 3.1 and  angle_tab[i-1] > 0:
+    #     angle_tab[i] = np.pi
+    #   elif angle_tab[i] >= 3.1 and angle_tab[i-1] < 0:
+    #     angle_tab[i] = -np.pi
        
         # theta123 = np.degrees(np.arctan2(path[i+1][1] - path[i][1], path[i+1][0] - path[i][0]))
         # diff = normalize_angle(theta123 - theta1)
@@ -183,107 +186,177 @@ class AngularController:
             w = -self.desired_w
 
         return w
+    
+class PID:
+    def __init__(self, kp, ki, kd, limit):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+
+        self.isum = 0.0
+        self.limit = limit
+        self.e_prev = 0.0
+        
+
+    def calc(self, desired, actual):
+        e = desired - actual
+        de = e - self.e_prev
+
+        self.isum = self.isum + e
+
+        output = self.kp*e + self.ki*self.isum + self.kd*de
+        
+
+        if(output > self.limit):
+            output = self.limit
+        if(output < -self.limit):
+            output = -self.limit
+          
+        self.e_prev = e
+
+
+        return output    
+
+def pol2Car(r, theta, pose):
+    x = r * np.cos(theta+pose[2]) + pose[0]
+    y = r * np.sin(theta+pose[2]) + pose[1]
+    point = np.matrix([[x],[y]])
+
+    return point
 
 def main(args=None):
   angle = 0
   rclpy.init(args=args)
   velocity_publisher = VelocityPublisher()
+  laser_raw_data = laser_node()
 
   Odometry = Odometry_DataSubscriber()
   executor = rclpy.executors.MultiThreadedExecutor()
   executor.add_node(Odometry)
+  executor.add_node(laser_raw_data)
   executor_thread = threading.Thread(target=executor.spin, daemon=True)
   executor_thread.start()
 
   rate = Odometry.create_rate(10)
 
   i = 0
-  controller = RobotController(Kp=7.0, Ki=0.5, Kd=0.05, dt=0.1, arrive_distance=0.1, angle_distance=0.1, desiredV=0.1)
-  controller.current = [Odometry.pose[0], Odometry.pose[1], Odometry.pose[2]]  # x, y, angle
-  goals = [[0.0, 0.0, 0.0],[1.0, 0.0, np.pi/2],[1.0,1.0,0.0],[2.0,1.0,0],[3.0,1.0, -np.pi/2],[3.0, 0.0, -np.pi],[2.0, 0.0, -np.pi/2],[2.0, -1.0, np.pi],[1.0, -1.0, np.pi],[0.0, -1.0, np.pi/2],[0.0, 0.0, np.pi/2],[0.0, 1.0, -np.pi],[-1.0, 1.0, -np.pi/2],[-1.0,0.0, -np.pi],[-2.0, 0.0, -np.pi]]
-  #goals= [[0.0, 0.0, 0.0], [0.0, 1.0, 1.0], [0.0, 2.0, 2.0], [2.0, 1.0, 3.0]]
-  angle = calculate_angle(goals)
-  angle.append(angle[-1])
-  for h in range(len(goals)):
-    print(goals[h][0], " ", goals[h][1], " |  ===== ", goals[h][2], " -=--",  angle[h])
-  plt.figure()
-  plt.plot(controller.current[0], controller.current[1], 'go')  # Start position
-  k=0
-
-  angularController = AngularController(Kp = 8.0, Ki =0.03, Kd=0.0, dt=0.1,  desired_w=2.0 )
-  desired_angle = np.arctan2(controller.current[1] - Odometry.pose[1],  controller.current[0]-Odometry.pose[0]) 
-  angle_tolerance = 0.01
-  while True:
-    # Calculate the current angle error
-    current_angle = Odometry.pose[2]  # Assuming this is the current angle
-    print(desired_angle, " ", current_angle)
-    error_angle = desired_angle - current_angle
-
-    # Wrap the angle error to the range [-pi, pi]
-    error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
-    # If the error is within the tolerance, break the loop
-    if abs(error_angle) < angle_tolerance:
-        velocity_publisher.publish_velocity(0.0, 0.0)
-        #rate.sleep() 
-        break
-
-    # Calculate angular velocity using the angular controller
-    w = angularController.control(error_angle)
-
-    velocity_publisher.publish_velocity(0.0, w)
-    #rate.sleep()
-  
+  #goals= [[0.0, 0.0, 0.0], [0.0, 0.0, -np.pi], [0.0, 0.0, np.pi], [0.0, 0.0, -np.pi], [0.0, 0.0, 0.0], [0.0, 0.0, np.pi/2], [0.0, 0.0, 0.0], [0.0, 0.0, -np.pi/2], [0.0, 0.0, 0.0]]
+  goals = [[0.0, 0.0, 0.0],[1.0, 0.0, np.pi/2],[1.0,1.0,0.0],[2.0,1.0,0],[3.0,1.0, -np.pi/2],[3.0, 0.0, -np.pi],[2.0, 0.0, -np.pi/2],[2.0, -1.0, -np.pi],[1.0, -1.0, -np.pi],[0.0, -1.0, np.pi/2],[0.0, 0.0, np.pi/2],[0.0, 1.0, np.pi],[-1.0, 1.0, -np.pi/2],[-1.0,0.0, -np.pi],[-2.0, 0.0, -np.pi]]
+  # goals = [[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [0.5, 0.5, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 0.0]]
+  # goals = [[0.0, 0.0, 0.0],[0.0, 0.5, 0.0],[-0.5, 0.5, 0.0],[-0.5, 0.0], [0.0, 0.0, 0.0]]
+  #goals = [[0.0, 0.0, 0.0], [0.0, -0.5, 0.0],[0.5, -0.5, 0.0],[0.5, 0.0, 0.0], [0.0, 0.0, 0.0]]
+  #goals = [[0.0, 0.0, 0.0], [-0.5, 0.0, 0.0],[-1.0, 0.0, 0.0],[-1.5, 0.0, 0.0],[-2.0, 0.0, 0.0]]
+  #goals = [[0.0, 0.0, 0.0], [0.0, 0.0, np.pi],[0.0, 0.0, -np.pi/2],[0.0, 0.0, -np.pi], [0.0, 0.0, np.pi/2]]
+  # angle = calculate_angle(goals)
+  # angle.append(angle[-1])
+  arrive_distance = 0.09
   try:
     while rclpy.ok():
-      k=k+1
-      if(i< len(goals)):
-        # print(i, " ", len(goals))
+       rate.sleep()
+       rate.sleep()
+       rate.sleep()
+       min_angle = -2.356100082397461
+       max_angle = 2.0932999382019043
+       angle_increment = 0.006144199054688215
 
-        controller.current = [Odometry.pose[0], Odometry.pose[1], Odometry.pose[2]] 
-        controller.goal = goals[i]  
-        plt.plot(controller.goal[0], controller.goal[1], 'ro')
-        v, w = controller.iteratePID()
 
-        velocity_publisher.publish_velocity(v, w) 
-        rate.sleep()
+       theta = np.arange(min_angle, max_angle, angle_increment)
+       dataScan = laser_raw_data.lidar_buf
 
-        # print(goals[i])
-        # print(Odometry.pose) 
+       if dataScan != 0:
+        dataScan = dataScan.to_list()
+        for k in range(len(dataScan)):
+                if np.isinf(dataScan[k]) or np.isnan(dataScan[k]):
+                    continue  
 
-        plt.plot(controller.current[0], controller.current[1], 'b.')  # Current position
+                pt = pol2Car(dataScan[k], theta[k], Odometry.pose)
+                plt.plot(pt[1], pt[0], 'bo')
+        plt.show()
+        
+    #   if(i< len(goals)):
+    #         goal = goals[i][0:2]
+    #         current = [Odometry.pose[0], Odometry.pose[1], Odometry.pose[2]] 
+    #         distance_to_goal = np.sqrt((goal[0] - current[0])**2 + (goal[1] - current[1])**2)
+    #         linearController = PID(kp = 0.09, ki =0.015, kd=0.001, limit=0.5)
+    #         angularController = PID(kp = 0.2, ki =0.005, kd=0.0001, limit=0.1)
+    #         d_x = goal[0] - current[0]
+    #         d_y = goal[1] - current[1]
 
-        distance_to_goal = np.sqrt((controller.goal[0] - controller.current[0])**2 + (controller.goal[1] - controller.current[1])**2)
-        # print(distance_to_goal, controller.arrive_distance)
-        if distance_to_goal < controller.arrive_distance:
-              angularController = AngularController(Kp = 8.0, Ki =0.03, Kd=0.0, dt=0.1,  desired_w=2.0 )
-              desired_angle = angle[i]  # Set your desired angle here
-              angle_tolerance = 0.01
-              while True:
-                # Calculate the current angle error
-                current_angle = Odometry.pose[2]  # Assuming this is the current angle
-                print(desired_angle, " ", current_angle)
-                error_angle = desired_angle - current_angle
+    #         # Angle from robot to goal
+    #         desired_angle = np.arctan2(d_y, d_x)
 
-                # Wrap the angle error to the range [-pi, pi]
-                error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
-                # If the error is within the tolerance, break the loop
-                if abs(error_angle) < angle_tolerance:
-                    velocity_publisher.publish_velocity(0.0, 0.0)
-                    #rate.sleep() 
-                    break
+    #     # ...
 
-                # Calculate angular velocity using the angular controller
-                w = angularController.control(error_angle)
+    #     # Calculate the current angle error
+              
+    #         current_angle = Odometry.pose[2] 
 
-                velocity_publisher.publish_velocity(0.0, w) 
-                #rate.sleep() 
+            
+    #         # Handle the discontinuity at -π and π
+    #         if abs(desired_angle - current_angle) > np.pi:
+    #             if desired_angle > current_angle:
+    #                 desired_angle -= 2 * np.pi
+    #             else:
+    #                 current_angle -= 2 * np.pi
 
-              i = i+1
+    #         # Calculate the difference between the desired and current angles
+    #         error_angle = desired_angle - current_angle
+
+    #         w = angularController.calc(error_angle, 0)
+    #         v = linearController.calc(distance_to_goal, 0)
+
+    #         print("seting  goal",i," | ", goal, " >>", current)
+    #         velocity_publisher.publish_velocity(v, w) 
+    #         rate.sleep()
+            
+
+    #         if distance_to_goal < arrive_distance:
+    #           velocity_publisher.publish_velocity(0.0, 0.0)
+    #           angularController = PID(kp = 0.09, ki =0.015, kd=0.01, limit=0.25)
+    #           desired_angle = goals[i][2]  # Set your desired angle here
+    #           angle_tolerance = 0.01
+    #           while True:
+    #             # Calculate the current angle error
+    #             current_angle = Odometry.pose[2]  # Assuming this is the current angle
+    #             error_angle = desired_angle - current_angle
+    #             print("seting  angle",i," | ", desired_angle, " >>>>", current_angle)
+
+
+    #             # Wrap the angle error to the range [-pi, pi]
+    #             # error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
+
+    #              # Handle the discontinuity at -π and π
+    #             if abs(desired_angle - current_angle) > np.pi:
+    #                 if desired_angle > current_angle:
+    #                     desired_angle -= 2 * np.pi
+    #                 else:
+    #                     current_angle -= 2 * np.pi
+
+    #             # Calculate the error
+    #             error_angle = desired_angle - current_angle
+    #             # If the error is within the tolerance, break the loop
+    #             if abs(error_angle) < angle_tolerance:
+    #                 velocity_publisher.publish_velocity(0.0, 0.0)
+    #                 rate.sleep() 
+    #                 rate.sleep()
+    #                 rate.sleep()
+    #                 rate.sleep()
+    #                 i = i+1
+    #                 break
+
+    #             # Calculate angular velocity using the angular controller
+    #             # w = angularController.calc(desired_angle, current_angle)
+    #             w = angularController.calc(error_angle, 0)
+
+    #             velocity_publisher.publish_velocity(0.0, w) 
+    #             rate.sleep() 
+
+              
       
-      if i == len(goals):
-        break
+    #   if i == len(goals):
+    #     break
 
-    plt.show()
+    # plt.show()
   except KeyboardInterrupt:
     pass
 
@@ -296,76 +369,6 @@ def main(args=None):
 
 if __name__ == "__main__":
      main()
-
-     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -395,11 +398,11 @@ if __name__ == "__main__":
 
 # def main():
 #     # Create a RobotController
-#     controller = RobotController(Kp=1.0, Ki=0.05, Kd=0.02, dt=0.1, arrive_distance=0.1, angle_distance=0.1, desiredV=1.0)
+#     controller = RobotController(Kp=0.5, Ki=0.05, Kd=0.02, dt=0.1, arrive_distance=0.1, angle_distance=0.1, desiredV=0.5)
 
 #     # Set the current and goal positions
 #     controller.current = [0.0, 0.0, -1.57]  # x, y, angle
-#     controller.goal = [1.0, 1.0, 2.0]  # x, y, angle
+#     controller.goal = [0.5, 0.5, 1.0]  # x, y, angle
 
 #     # Prepare the plot
 #     plt.figure()
@@ -448,8 +451,8 @@ if __name__ == "__main__":
 
 # def main():
 #     controller = RobotController(Kp=7.0, Ki=0.5, Kd=0.01, dt=0.1, arrive_distance=0.1, angle_distance=0.1, desiredV=0.1)
-#     controller.current = [5.0, 1.0, 2.0]  # x, y, angle
-#     goals = [[0.0, 0.0, 0], [0.5, 0.0, 0], [1.0, 0.0, 0], [1.5, 0.0, 0], [2.0, 0.0, 0], [2.5, 0.0, 0], [3.0, 0.0, 0], [3.5, 0.0, 0], [4.0, 0.0, 0], [4.5, 0.0, 0], [5.0, 0.0, 0], [5.0, 0.5, 0], [5.0, 1.0, 0], [5.0, 1.5, 0], [5.0, 2.0, 0], [5.0, 2.5, 0], [5.0, 3.0, 0], [5.0, 3.5, 0], [5.0, 4.0, 0], [5.0, 4.5, 0], [5.0, 5.0, 0], [5.0, 5.5, 0], [5.0, 6.0, 0], [5.0, 6.5, 0], [5.0, 7.0, 0], [5.0, 7.5, 0], [5.0, 8.0, 0], [5.0, 8.5, 0], [5.0, 9.0, 0], [5.0, 9.5, 0]]
+#     controller.current = [5.0, 0.5, 1.0]  # x, y, angle
+#     goals = [[0.0, 0.0, 0], [0.5, 0.0, 0], [0.5, 0.0, 0], [1.5, 0.0, 0], [1.0, 0.0, 0], [2.5, 0.0, 0], [1.5, 0.0, 0], [3.5, 0.0, 0], [4.0, 0.0, 0], [4.5, 0.0, 0], [5.0, 0.0, 0], [5.0, 0.5, 0], [5.0, 0.5, 0], [5.0, 1.5, 0], [5.0, 1.0, 0], [5.0, 2.5, 0], [5.0, 1.5, 0], [5.0, 3.5, 0], [5.0, 4.0, 0], [5.0, 4.5, 0], [5.0, 5.0, 0], [5.0, 5.5, 0], [5.0, 6.0, 0], [5.0, 6.5, 0], [5.0, 7.0, 0], [5.0, 7.5, 0], [5.0, 8.0, 0], [5.0, 8.5, 0], [5.0, 9.0, 0], [5.0, 9.5, 0]]
 #     plt.figure()
 #     plt.plot(controller.current[0], controller.current[1], 'go')  # Start position
 

@@ -17,10 +17,10 @@ class grid_map:
 
         self.hit_threshold = 100
         self.miss_threshold = -20
-        self.p_hit = 0.99
+        self.p_hit = 0.90
         self.p_miss = 0.40
 
-        self.sensor_displacement = 0.05
+        self.sensor_displacement = 0.15
         self.pathX = []
         self.pathY = []
 
@@ -73,8 +73,8 @@ class grid_map:
 
             obstacle_x = int(pt[0]/self.resolution_before_reducing) + self.center_before_reducing
             obstacle_y = int(pt[1]/self.resolution_before_reducing) + self.center_before_reducing
-            if(abs(pt[0] - sensor_position[1]) > 0.1 and abs(pt[1] - sensor_position[1])  > 0.1):
-                self.map[obstacle_y][obstacle_x] = self.hit( self.map[obstacle_y][obstacle_x] )
+            # if(abs(pt[0] - sensor_position[1]) > 0.1 and abs(pt[1] - sensor_position[1])  > 0.1):
+            self.map[obstacle_y][obstacle_x] = self.hit( self.map[obstacle_y][obstacle_x] )
         
 
         self.prob_map = self.computeProbab(self.map)
