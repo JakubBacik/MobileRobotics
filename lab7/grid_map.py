@@ -74,12 +74,20 @@ class grid_map:
             obstacle_x = int(pt[0]/self.resolution_before_reducing) + self.center_before_reducing
             obstacle_y = int(pt[1]/self.resolution_before_reducing) + self.center_before_reducing
             # if(abs(pt[0] - sensor_position[1]) > 0.1 and abs(pt[1] - sensor_position[1])  > 0.1):
-#            self.map[obstacle_y][obstacle_x] = self.hit( self.map[obstacle_y][obstacle_x] )
+            self.map[obstacle_y][obstacle_x] = self.hit( self.map[obstacle_y][obstacle_x] )
         
 
         self.prob_map = self.computeProbab(self.map)
 
-        
+
+    def show_data(self, map_msg_data):
+        text = []
+        for i in self.prob_map:
+            for j in i:
+                text.append(int(j*100))
+
+        map_msg_data.publish_map(text)
+
     def ray_trace(self, end, start):
         A = end[1] - start[1]
         B = start[0] - end[0]

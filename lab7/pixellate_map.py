@@ -64,6 +64,17 @@ class pixellate_map():
     #                     if self.prob_map[x_s][y_s] > self.obstacle_threshold:
     #                         self.drive_map[int(x/self.filter_size)][int(y/self.filter_size)] = 123456
 
+    def show_data(self, obstacle_map_msg_data):
+        text = []
+        for i in self.drive_map:
+            for j in i:
+                if j == 123456.0:
+                    text.append(-1)
+                else:
+                    text.append(int(abs(j)))
+
+        obstacle_map_msg_data.publish_map(text)
+
 
     def pixellate_map(self):    
         for x in range(0, self.numberOfBoxSmall, self.filter_size):
