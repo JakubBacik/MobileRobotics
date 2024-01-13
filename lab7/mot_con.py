@@ -72,33 +72,6 @@ def end_nodes(laser_raw_data, velocity_publisher, odom_raw_data, map_msg_data, o
 
 
 
-def set_correct_angle_position(current, odom_raw_data, velocity_publisher):
-    angularController = PID(kp = 0.09, ki =0.015, kd=0.01, limit=0.25)
-    desired_angle = np.arctan2(current[1] - odom_raw_data.pose[1],  current[0]-odom_raw_data.pose[0]) 
-    angle_tolerance = 0.1
-
-    while True:
-        # Calculate the current angle error
-        current_angle = odom_raw_data.pose[2] 
-        print("set angle ", current_angle, " | " ,desired_angle)
-
-        # print(desired_angle, " ", current_angle)
-        error_angle = desired_angle - current_angle
-
-        # If the error is within the tolerance, break the loop
-        if abs(error_angle) < angle_tolerance:
-            velocity_publisher.publish_velocity(0.0, 0.0)
-            time.sleep(0.1) 
-            break
-
-        # Calculate angular velocity using the angular controller
-        w = angularController.calc(error_angle, 0)
-
-        velocity_publisher.publish_velocity(0.0, w)
-        time.sleep(0.1)
-
-
-
 def robot_map( pixellate_map_obj, odom_raw_data, laser_raw_data, velocity_publisher, map_msg_data, obstacle_map_msg_data, path_map_msg_data):
     global list_of_path_from_thread
 
@@ -129,6 +102,53 @@ def robot_map( pixellate_map_obj, odom_raw_data, laser_raw_data, velocity_publis
 
 
 
+def run_angle_ctrl( angle_controller, desired_angle, odom_raw_data, velocity_publisher ):
+    angle_tolerance = 0.01
+    error_angle = 2*angle_tolerance
+                
+    while abs(error_angle) > angle_tolerance:
+        current_angle = odom_raw_data.pose[2]
+        error_angle = desired_angle - current_angle
+
+        print("seting  angle | ", desired_angle, " >>>>", current_angle)
+
+        w = angle_controller.calc(error_angle, 0)
+#                    print("velocity ", w)  
+        velocity_publisher.publish_velocity(0.0, float(w)) 
+        time.sleep(0.1)
+
+
+
+def run_linear_ctrl( angularController, linearController, goal, odom_raw_data, laser_raw_data, velocity_publisher):
+    distance_tolerance = 0.09
+    distance_to_goal = 2*distance_tolerance
+
+    while distance_to_goal > distance_tolerance:  
+        if check_front( laser_raw_data, 0.2):  
+            velocity_publisher.publish_velocity(0.0, 0.0)
+            print("Obstacle in front of the robot")  
+            break
+        
+        current = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]] 
+        distance_to_goal = np.sqrt((goal[0] - current[0])**2 + (goal[1] - current[1])**2)
+        
+        d_x = goal[0] - current[0]
+        d_y = goal[1] - current[1]
+
+        # Angle from robot to goal
+        desired_angle = np.arctan2(d_y, d_x)
+        current_angle = odom_raw_data.pose[2] 
+        error_angle = desired_angle - current_angle
+
+        w = angularController.calc(error_angle, 0)
+        v = linearController.calc(distance_to_goal, 0)
+
+        print("seting  goal | ", goal, " >>", current)
+#        print("velocity", float(v), " ", float(w))
+        velocity_publisher.publish_velocity(v, w) 
+        time.sleep(0.1)
+
+
 
 def main(args=None):
     global list_of_path
@@ -137,8 +157,6 @@ def main(args=None):
     global user_specified_angle
     global user_specified_position
     
-    angle_tolerance = 0.01
-    distance_tolerance = 0.09
     user_specified_angle = 0.0
     list_of_path_from_thread = []
     user_specified_position = [40, 25]
@@ -175,10 +193,11 @@ def main(args=None):
                     time.sleep(0.1)
                 
             if iteration == 1: # pretty sure 1 is right this time
-                print(list_of_path_from_thread)
                 list_of_path = [map_coord(y, x, grid_map_obj) for x, y in zip(*list_of_path_from_thread)]
                 print("Robot path ", list_of_path, "list_of_path_from_thread", list_of_path_from_thread) 
-                set_correct_angle_position([list_of_path[1][0], list_of_path[1][1]], odom_raw_data, velocity_publisher)
+                current = [list_of_path[1][0], list_of_path[1][1]]
+                desired_angle = np.arctan2(current[1] - odom_raw_data.pose[1],  current[0]-odom_raw_data.pose[0])
+                run_angle_ctrl( angle_controller, desired_angle, odom_raw_data, velocity_publisher )
 
             if iteration > 1:
 
@@ -188,85 +207,24 @@ def main(args=None):
                 
 #                print("Robot path box ", list_of_path)
 #                print("Robot path angle ", list_of_angle)
-
-                is_in_position = 0
+#                print(list_of_path[0:3], list_of_angle[0:3])
+                
                 goals = list_of_path[1]
                 angle = list_of_angle[1] 
+                goal = goals[0:2]
 
-                while True:  
-                    if check_front( laser_raw_data, 0.2):  
-                        velocity_publisher.publish_velocity(0.0, 0.0)
-                        print("Obstacle in front of the robot")  
-                        break
-                    
-                    if is_in_position == 1:
-                        is_in_position = 0
-                        break
-
-                    goal = goals[0:2]
-
-                    current = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]] 
-                    distance_to_goal = np.sqrt((goal[0] - current[0])**2 + (goal[1] - current[1])**2)
-                    
-                    d_x = goal[0] - current[0]
-                    d_y = goal[1] - current[1]
-
-                    # Angle from robot to goal
-                    desired_angle = np.arctan2(d_y, d_x)
-                    
-                    current_angle = odom_raw_data.pose[2] 
-
-                    # Calculate the difference between the desired and current angles
-                    error_angle = desired_angle - current_angle
-
-                    w = angularController.calc(error_angle, 0)
-                    v = linearController.calc(distance_to_goal, 0)
-
-                    print("seting  goal | ", goal, " >>", current)
-                    print("velocity", float(v), " ", float(w))
-                    velocity_publisher.publish_velocity(v, w) 
-                    time.sleep(0.1)
-
-
-                    if distance_to_goal < distance_tolerance: 
-                        while True:
-                            list_of_path = [map_coord(y, x, grid_map_obj) for x, y in zip(*list_of_path_from_thread)]  
-                            list_of_angle = pixellate_map_obj.calculate_angle(list_of_path)
-                            list_of_angle.append(user_specified_angle)
-                            desired_angle = list_of_angle[0]
-                            # Calculate the current angle error
-                            current_angle = odom_raw_data.pose[2]  # Assuming this is the current angle
-                            error_angle = desired_angle - current_angle
-                            print(list_of_path[0:3], list_of_angle[0:3])
-                            print("seting  angle | ", desired_angle, " >>>>", current_angle)
-
-                            # Calculate the error
-                            error_angle = desired_angle - current_angle
-                            # If the error is within the tolerance, break the loop
-                            if abs(error_angle) < angle_tolerance:
-                                velocity_publisher.publish_velocity(0.0, 0.0)
-                                time.sleep(0.1) 
-                                is_in_position = 1
-                                break
-
-                            # Calculate angular velocity using the angular controller
-                            w = angle_controller.calc(error_angle, 0)
-                            print("velocity ", w)  
-                            velocity_publisher.publish_velocity(0.0, float(w)) 
-                            time.sleep(0.1) 
-
-                    time.sleep(0.1)
-                    if 1 == len(list_of_path):
-                        print("jeden")
-                        finished = 1
-                        break
-
-                if finished == 1:
-                    print("dwea")
+                run_linear_ctrl( angularController, linearController, goal, odom_raw_data, laser_raw_data, velocity_publisher)
+                run_angle_ctrl( angle_controller, list_of_angle[0], odom_raw_data, velocity_publisher )
+                
+                if 1 == len(list_of_path):
+                    finished = 1
                     break
-                        
+                
+                velocity_publisher.publish_velocity(0.0, 0.0)
+                time.sleep(0.1) 
+
             if finished == 1:
-                print('trzty')
+                print('The end')
                 break                      
 
             iteration += 1
@@ -275,7 +233,6 @@ def main(args=None):
     except KeyboardInterrupt: # excludes read_from_input as it uses the same console
         print('nie')
         pass
-    
 
 
     end_nodes(laser_raw_data, velocity_publisher, odom_raw_data, map_msg_data, obstacle_map_msg_data, path_map_msg_data)    
