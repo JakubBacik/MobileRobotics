@@ -2,7 +2,7 @@ import rclpy
 import pylab as pl
 import threading
 import numpy as np
-
+import time
 from pixellate_map import pixellate_map
 from grid_map import grid_map
 from pid import PID_linear, PID_angular, PID
@@ -86,13 +86,39 @@ def set_correct_angle_position(current, odom_raw_data, velocity_publisher, rate)
         rate.sleep()
 
 
-def robot_map():
-    
+def robot_map(odom_raw_data, grid_map_obj, pixellate_map_obj, laser_raw_data, velocity_publisher):
+    global list_of_path_from_thread
+    while True:
+        position = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]]        
+        grid_map_obj.iterateLidar( laser_raw_data.lidar_buf.tolist(), position)
+        pixellate_map_obj.prob_map = grid_map_obj.prob_map
+        pixellate_map_obj.pixellate_map()
+
+        position = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]]
+        pixellate_map_obj.clear_drive_map()
+        pixellate_map_obj.set_end_position(end_of_robot_position)
+        current_pos = box_coord(position[0], position[1], grid_map_obj)
+        print("Robot position ", [position[0], position[1]])
+        pixellate_map_obj.set_start_position([current_pos[0], current_pos[1]])
+        
+
+        pixellate_map_obj.calculate_dists()
+
+        pixellate_map_obj.path_finding()
+        velocity_publisher.publish_velocity(0.0, 0.0)
+
+        list_of_path123 = [map_coord(y, x, grid_map_obj) for x, y in zip(*list_of_path_from_thread)] 
+        print("Robot path  ",list_of_path123)
+
+        list_of_path_from_thread = pixellate_map_obj.path
+        time.sleep(0.5)
 
 
 
 def main(args=None):
     global list_of_path
+    global list_of_path_from_thread
+    list_of_path_from_thread= []
     global list_of_angle
     global angle123
     angle123 = 0.0
@@ -107,6 +133,8 @@ def main(args=None):
     read_from_input_thread = threading.Thread(target=read_from_input, daemon=True)
     executor_thread = threading.Thread(target=executor.spin, daemon=True)
     executor_thread.start()
+
+    path_map_creator = threading.Thread(target=robot_map, args=(odom_raw_data, grid_map_obj, pixellate_map_obj, laser_raw_data, velocity_publisher), daemon=True)
     
     rate = laser_raw_data.create_rate(8)
     
@@ -115,29 +143,18 @@ def main(args=None):
     
     global end_of_robot_position
     end_of_robot_position=[40, 25]
-    pl.figure(figsize=(20, 10))
-    pl.subplot(1, 3, 1)
     position = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]]
 
     pixellate_map_obj.set_end_position(end_of_robot_position)
     current_pos = box_coord(position[0], position[1], grid_map_obj)
-    # print("Robot position ", [position[0], position[1]])
     pixellate_map_obj.set_start_position([current_pos[0], current_pos[1]])
     
     grid_map_obj.iterateLidar( laser_raw_data.lidar_buf.tolist(), position)
-    grid_map_obj.printMap(position)
 
-    pl.subplot(1, 3, 2)
     pixellate_map_obj.prob_map = grid_map_obj.prob_map
     pixellate_map_obj.pixellate_map()
-    pixellate_map_obj.print_drive_map()
 
-    ax = pl.subplot(1, 3, 3)
-    ax.set_xlim(0, pixellate_map_obj.numberOfBox-1)
-    ax.set_ylim(0, pixellate_map_obj.numberOfBox-1)
-    ax.grid()
     pixellate_map_obj.calculate_dists()
-    pixellate_map_obj.print_path_map()
     
 
     read_from_input_thread.start()
@@ -149,42 +166,18 @@ def main(args=None):
     path_123 = []
     
     k = 0
+    path_map_creator.start()
 
     try:
         while rclpy.ok(): 
             print("============================== ", k)
-            position = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]]        
-            grid_map_obj.iterateLidar( laser_raw_data.lidar_buf.tolist(), position)
-            grid_map_obj.update(position)
-            pixellate_map_obj.prob_map = grid_map_obj.prob_map
-            pixellate_map_obj.pixellate_map()
-            pixellate_map_obj.update_drive_map()
-
-            position = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]]
-            pixellate_map_obj.clear_drive_map()
-            pixellate_map_obj.set_end_position(end_of_robot_position)
-            current_pos = box_coord(position[0], position[1], grid_map_obj)
-            print("Robot position ", [position[0], position[1]])
-            pixellate_map_obj.set_start_position([current_pos[0], current_pos[1]])
-            print("Robot BOX  position ", [current_pos[0], current_pos[1]])
-            
-
-            pixellate_map_obj.calculate_dists()
-            pixellate_map_obj.update_path_map()
-            
-            
-            ax.cla()
-            ax.set_xlim(0, pixellate_map_obj.numberOfBox-1)
-            ax.set_ylim(0, pixellate_map_obj.numberOfBox-1)
-            pixellate_map_obj.print_path_map()
-
-            pixellate_map_obj.path_finding()
-            pixellate_map_obj.draw_path()  
-            velocity_publisher.publish_velocity(0.0, 0.0)
-            print("Robot path  ",pixellate_map_obj.path)
-            
+            while len(list_of_path_from_thread) == 0:
+                rate.sleep()
+                
             if k == 2:
-                list_of_path = [map_coord(y, x, grid_map_obj) for x, y in zip(*pixellate_map_obj.path)]  
+                print(list_of_path_from_thread)
+                list_of_path = [map_coord(y, x, grid_map_obj) for x, y in zip(*list_of_path_from_thread)]
+                print("Robot path ", list_of_path, "list_of_path_from_thread", list_of_path_from_thread) 
                 set_correct_angle_position([list_of_path[1][0], list_of_path[1][1]], odom_raw_data, velocity_publisher, rate)
 
             if k == 0:
@@ -192,7 +185,7 @@ def main(args=None):
 
             if k > 2:
 
-                list_of_path = [map_coord(y, x, grid_map_obj) for x, y in zip(*pixellate_map_obj.path)]  
+                list_of_path = [map_coord(y, x, grid_map_obj) for x, y in zip(*list_of_path_from_thread)]  
                 list_of_angle = pixellate_map_obj.calculate_angle(list_of_path)
                 list_of_angle.append(angle123)
                 
@@ -307,7 +300,7 @@ def main(args=None):
     # robot_drive_thread.join()
     end_node(laser_raw_data, velocity_publisher, odom_raw_data, executor)    
     rclpy.shutdown()
-    
+    path_map_creator.join()
     read_from_input_thread.join()
     executor_thread.join()
 
