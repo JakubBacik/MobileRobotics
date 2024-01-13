@@ -74,7 +74,7 @@ class grid_map:
             obstacle_x = int(pt[0]/self.resolution_before_reducing) + self.center_before_reducing
             obstacle_y = int(pt[1]/self.resolution_before_reducing) + self.center_before_reducing
             # if(abs(pt[0] - sensor_position[1]) > 0.1 and abs(pt[1] - sensor_position[1])  > 0.1):
-            self.map[obstacle_y][obstacle_x] = self.hit( self.map[obstacle_y][obstacle_x] )
+#            self.map[obstacle_y][obstacle_x] = self.hit( self.map[obstacle_y][obstacle_x] )
         
 
         self.prob_map = self.computeProbab(self.map)
@@ -104,6 +104,19 @@ class grid_map:
                 center_hit = 0
                 r_hit = 0
                 l_hit = 0
+
+                if( dx > 0 ):
+                    if( x == end_box[0] - 1 ):
+                        self.map[y][x] = self.hit( self.map[y][x] )
+                        self.map[end_box[1]][end_box[0]] = self.hit( self.map[end_box[1]][end_box[0]] )
+                        break
+                else:
+                    if( x == end_box[0] + 1 ):
+                        self.map[y][x] = self.hit( self.map[y][x] )
+                        self.map[end_box[1]][end_box[0]] = self.hit( self.map[end_box[1]][end_box[0]] )
+                        break
+
+
 
                 x_r = x
                 y_r = y + 1
@@ -135,12 +148,25 @@ class grid_map:
                 elif( l_hit ):
                     y = y_l
 
+                
+
 
         else:
             for y in self.scan_line_range( start_box, end_box, 1):
                 center_hit = 0
                 r_hit = 0
                 l_hit = 0
+
+                if( dy > 0 ):
+                    if( y == end_box[1] - 1 ):
+                        self.map[y][x] = self.hit( self.map[y][x] )
+                        self.map[end_box[1]][end_box[0]] = self.hit( self.map[end_box[1]][end_box[0]] )
+                        continue
+                else:
+                    if( y == end_box[1] + 1 ):
+                        self.map[y][x] = self.hit( self.map[y][x] )
+                        self.map[end_box[1]][end_box[0]] = self.hit( self.map[end_box[1]][end_box[0]] )
+                        continue
                 
                 x_r = x + 1
                 y_r = y
@@ -171,6 +197,8 @@ class grid_map:
                     x = x_r
                 elif( l_hit ):
                     x = x_l
+
+                
 
 
 
