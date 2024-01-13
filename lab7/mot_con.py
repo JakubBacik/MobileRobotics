@@ -86,6 +86,10 @@ def set_correct_angle_position(current, odom_raw_data, velocity_publisher, rate)
         rate.sleep()
 
 
+def robot_map():
+    
+
+
 
 def main(args=None):
     global list_of_path
