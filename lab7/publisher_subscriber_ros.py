@@ -2,6 +2,9 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist     
 from nav_msgs.msg import Odometry     
 from sensor_msgs.msg import LaserScan 
+from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Path
 import numpy as np
 
 '''
@@ -39,6 +42,60 @@ class odometry_node(Node):
         self.pose[2] = self.euler_from_quaternion(msg.pose.pose.orientation)[2]
 
 
+class map_msg(Node):
+    def __init__(self):
+        super().__init__('MapMsg')
+        self.publisher_robot_state = self.create_publisher(OccupancyGrid, '/map_msg', 1)
+
+    def publish_map(self, map_txt):
+        map_msg = OccupancyGrid()
+        map_msg.header.frame_id = 'odom'
+        map_msg.info.resolution = 0.1
+        map_msg.info.width = 250
+        map_msg.info.height = 250
+        map_msg.info.origin.position.x = -12.5
+        map_msg.info.origin.position.y = -12.5
+        map_msg.data = map_txt
+
+        self.publisher_robot_state.publish(map_msg)
+
+class obstacle_map_msg(Node):
+    def __init__(self):
+        super().__init__('ObstacleMapMsg')
+        self.publisher_robot_state1 = self.create_publisher(OccupancyGrid, '/map_msg_obstacle', 1)
+
+    def publish_map(self, map_txt):
+        map_msg1 = OccupancyGrid()
+        map_msg1.header.frame_id = 'odom'
+        map_msg1.info.resolution = 0.5
+        map_msg1.info.width = 50
+        map_msg1.info.height = 50
+        map_msg1.info.origin.position.x = -12.5
+        map_msg1.info.origin.position.y = -12.5
+        map_msg1.data = map_txt
+
+        self.publisher_robot_state1.publish(map_msg1)
+
+class path_map_msg(Node):
+    def __init__(self):
+        super().__init__('PathMapMsg')
+        self.publisher_robot_state1 = self.create_publisher(Path, '/path_map_msg', 1)
+    
+    def publish_path(self,path):
+        msg = Path()
+        msg.header.frame_id = "odom"
+
+        for i in path:
+            pose1 = PoseStamped()
+            pose1.pose.position.x = float(i[0])
+            pose1.pose.position.y = float(i[1])
+
+            msg.poses.append(pose1)
+
+        self.publisher_robot_state1.publish(msg)    
+
+    
+
 '''
   This class is used to publish velocity commands to the robot.
 '''
@@ -61,7 +118,7 @@ class velocity_node(Node):
 '''
 class laser_node(Node):
     def __init__(self):
-        super().__init__('data_subscriber')
+        super().__init__('data_subscriber') 
         self.lidar_buf = 0
 
         self.sub_lidar = self.create_subscription(LaserScan, '/demo/laser/out', self.lidar_callback, 10)
@@ -70,3 +127,5 @@ class laser_node(Node):
 
     def lidar_callback(self, msg):
         self.lidar_buf = msg.ranges
+
+

@@ -241,122 +241,102 @@ def main(args=None):
 
   i = 0
   #goals= [[0.0, 0.0, 0.0], [0.0, 0.0, -np.pi], [0.0, 0.0, np.pi], [0.0, 0.0, -np.pi], [0.0, 0.0, 0.0], [0.0, 0.0, np.pi/2], [0.0, 0.0, 0.0], [0.0, 0.0, -np.pi/2], [0.0, 0.0, 0.0]]
-  goals = [[0.0, 0.0, 0.0],[1.0, 0.0, np.pi/2],[1.0,1.0,0.0],[2.0,1.0,0],[3.0,1.0, -np.pi/2],[3.0, 0.0, -np.pi],[2.0, 0.0, -np.pi/2],[2.0, -1.0, -np.pi],[1.0, -1.0, -np.pi],[0.0, -1.0, np.pi/2],[0.0, 0.0, np.pi/2],[0.0, 1.0, np.pi],[-1.0, 1.0, -np.pi/2],[-1.0,0.0, -np.pi],[-2.0, 0.0, -np.pi]]
+  #goals = [[0.0, 0.0, 0.0],[1.0, 0.0, np.pi/2],[1.0,1.0,0.0],[2.0,1.0,0],[3.0,1.0, -np.pi/2],[3.0, 0.0, -np.pi],[2.0, 0.0, -np.pi/2],[2.0, -1.0, -np.pi],[1.0, -1.0, -np.pi],[0.0, -1.0, np.pi/2],[0.0, 0.0, np.pi/2],[0.0, 1.0, np.pi],[-1.0, 1.0, -np.pi/2],[-1.0,0.0, -np.pi],[-2.0, 0.0, -np.pi]]
   # goals = [[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [0.5, 0.5, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 0.0]]
   # goals = [[0.0, 0.0, 0.0],[0.0, 0.5, 0.0],[-0.5, 0.5, 0.0],[-0.5, 0.0], [0.0, 0.0, 0.0]]
   #goals = [[0.0, 0.0, 0.0], [0.0, -0.5, 0.0],[0.5, -0.5, 0.0],[0.5, 0.0, 0.0], [0.0, 0.0, 0.0]]
   #goals = [[0.0, 0.0, 0.0], [-0.5, 0.0, 0.0],[-1.0, 0.0, 0.0],[-1.5, 0.0, 0.0],[-2.0, 0.0, 0.0]]
-  #goals = [[0.0, 0.0, 0.0], [0.0, 0.0, np.pi],[0.0, 0.0, -np.pi/2],[0.0, 0.0, -np.pi], [0.0, 0.0, np.pi/2]]
+  goals = [[0.0, 0.0, 0.0], [0.0, 0.0, np.pi],[0.0, 0.0, -np.pi/2],[0.0, 0.0, -np.pi], [0.0, 0.0, np.pi/2]]
   # angle = calculate_angle(goals)
   # angle.append(angle[-1])
   arrive_distance = 0.09
   try:
     while rclpy.ok():
-       rate.sleep()
-       rate.sleep()
-       rate.sleep()
-       min_angle = -2.356100082397461
-       max_angle = 2.0932999382019043
-       angle_increment = 0.006144199054688215
 
+        if(i< len(goals)):
+            goal = goals[i][0:2]
+            current = [Odometry.pose[0], Odometry.pose[1], Odometry.pose[2]] 
+            distance_to_goal = np.sqrt((goal[0] - current[0])**2 + (goal[1] - current[1])**2)
+            linearController = PID(kp = 0.09, ki =0.015, kd=0.001, limit=0.5)
+            angularController = PID(kp = 0.2, ki =0.005, kd=0.0001, limit=0.1)
+            d_x = goal[0] - current[0]
+            d_y = goal[1] - current[1]
 
-       theta = np.arange(min_angle, max_angle, angle_increment)
-       dataScan = laser_raw_data.lidar_buf
+            # Angle from robot to goal
+            desired_angle = np.arctan2(d_y, d_x)
 
-       if dataScan != 0:
-        dataScan = dataScan.to_list()
-        for k in range(len(dataScan)):
-                if np.isinf(dataScan[k]) or np.isnan(dataScan[k]):
-                    continue  
+        # ...
 
-                pt = pol2Car(dataScan[k], theta[k], Odometry.pose)
-                plt.plot(pt[1], pt[0], 'bo')
-        plt.show()
-        
-    #   if(i< len(goals)):
-    #         goal = goals[i][0:2]
-    #         current = [Odometry.pose[0], Odometry.pose[1], Odometry.pose[2]] 
-    #         distance_to_goal = np.sqrt((goal[0] - current[0])**2 + (goal[1] - current[1])**2)
-    #         linearController = PID(kp = 0.09, ki =0.015, kd=0.001, limit=0.5)
-    #         angularController = PID(kp = 0.2, ki =0.005, kd=0.0001, limit=0.1)
-    #         d_x = goal[0] - current[0]
-    #         d_y = goal[1] - current[1]
-
-    #         # Angle from robot to goal
-    #         desired_angle = np.arctan2(d_y, d_x)
-
-    #     # ...
-
-    #     # Calculate the current angle error
+        # Calculate the current angle error
               
-    #         current_angle = Odometry.pose[2] 
+            current_angle = Odometry.pose[2] 
 
             
-    #         # Handle the discontinuity at -π and π
-    #         if abs(desired_angle - current_angle) > np.pi:
-    #             if desired_angle > current_angle:
-    #                 desired_angle -= 2 * np.pi
-    #             else:
-    #                 current_angle -= 2 * np.pi
+            # Handle the discontinuity at -π and π
+            if abs(desired_angle - current_angle) > np.pi:
+                if desired_angle > current_angle:
+                    desired_angle -= 2 * np.pi
+                else:
+                    current_angle -= 2 * np.pi
 
-    #         # Calculate the difference between the desired and current angles
-    #         error_angle = desired_angle - current_angle
+            # Calculate the difference between the desired and current angles
+            error_angle = desired_angle - current_angle
 
-    #         w = angularController.calc(error_angle, 0)
-    #         v = linearController.calc(distance_to_goal, 0)
+            w = angularController.calc(error_angle, 0)
+            v = linearController.calc(distance_to_goal, 0)
 
-    #         print("seting  goal",i," | ", goal, " >>", current)
-    #         velocity_publisher.publish_velocity(v, w) 
-    #         rate.sleep()
+            print("seting  goal",i," | ", goal, " >>", current)
+            velocity_publisher.publish_velocity(v, w) 
+            rate.sleep()
             
 
-    #         if distance_to_goal < arrive_distance:
-    #           velocity_publisher.publish_velocity(0.0, 0.0)
-    #           angularController = PID(kp = 0.09, ki =0.015, kd=0.01, limit=0.25)
-    #           desired_angle = goals[i][2]  # Set your desired angle here
-    #           angle_tolerance = 0.01
-    #           while True:
-    #             # Calculate the current angle error
-    #             current_angle = Odometry.pose[2]  # Assuming this is the current angle
-    #             error_angle = desired_angle - current_angle
-    #             print("seting  angle",i," | ", desired_angle, " >>>>", current_angle)
+            if distance_to_goal < arrive_distance:
+              velocity_publisher.publish_velocity(0.0, 0.0)
+              angularController = PID(kp = 0.09, ki =0.015, kd=0.01, limit=0.25)
+              desired_angle = goals[i][2]  # Set your desired angle here
+              angle_tolerance = 0.01
+              while True:
+                # Calculate the current angle error
+                current_angle = Odometry.pose[2]  # Assuming this is the current angle
+                error_angle = desired_angle - current_angle
+                print("seting  angle",i," | ", desired_angle, " >>>>", current_angle)
 
 
-    #             # Wrap the angle error to the range [-pi, pi]
-    #             # error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
+                # Wrap the angle error to the range [-pi, pi]
+                # error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
 
-    #              # Handle the discontinuity at -π and π
-    #             if abs(desired_angle - current_angle) > np.pi:
-    #                 if desired_angle > current_angle:
-    #                     desired_angle -= 2 * np.pi
-    #                 else:
-    #                     current_angle -= 2 * np.pi
+                 # Handle the discontinuity at -π and π
+                if abs(desired_angle - current_angle) > np.pi:
+                    if desired_angle > current_angle:
+                        desired_angle -= 2 * np.pi
+                    else:
+                        current_angle -= 2 * np.pi
 
-    #             # Calculate the error
-    #             error_angle = desired_angle - current_angle
-    #             # If the error is within the tolerance, break the loop
-    #             if abs(error_angle) < angle_tolerance:
-    #                 velocity_publisher.publish_velocity(0.0, 0.0)
-    #                 rate.sleep() 
-    #                 rate.sleep()
-    #                 rate.sleep()
-    #                 rate.sleep()
-    #                 i = i+1
-    #                 break
+                # Calculate the error
+                error_angle = desired_angle - current_angle
+                # If the error is within the tolerance, break the loop
+                if abs(error_angle) < angle_tolerance:
+                    velocity_publisher.publish_velocity(0.0, 0.0)
+                    rate.sleep() 
+                    rate.sleep()
+                    rate.sleep()
+                    rate.sleep()
+                    i = i+1
+                    break
 
-    #             # Calculate angular velocity using the angular controller
-    #             # w = angularController.calc(desired_angle, current_angle)
-    #             w = angularController.calc(error_angle, 0)
+                # Calculate angular velocity using the angular controller
+                # w = angularController.calc(desired_angle, current_angle)
+                w = angularController.calc(error_angle, 0)
 
-    #             velocity_publisher.publish_velocity(0.0, w) 
-    #             rate.sleep() 
+                velocity_publisher.publish_velocity(0.0, w) 
+                rate.sleep() 
 
               
       
-    #   if i == len(goals):
-    #     break
+        if i == len(goals):
+            break
 
-    # plt.show()
+    plt.show()
   except KeyboardInterrupt:
     pass
 
