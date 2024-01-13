@@ -27,25 +27,39 @@ class pixellate_map():
         self.path = []
         self.angle= []
 
+
+
     def set_start_position(self, start_position):
         self.start_position = start_position
     
+
+
     def set_end_position(self, end_position):
         self.end_position = end_position
+
+
 
     def print_drive_map(self):
         self.drive_show = pl.imshow( self.drive_map, interpolation="nearest", cmap='Blues', origin='lower')
         pl.show(block=False)
 
+
+
     def update_drive_map(self):
         self.drive_show.set_data(self.drive_map)
+
+
 
     def print_path_map(self):
         self.path_show = pl.imshow( self.path_map, interpolation="nearest", cmap='Blues', origin='lower')
         pl.show( block=False )
     
+
+
     def update_path_map(self):
         self.path_show.set_data(self.path_map)
+
+
 
     def draw_path(self):
         pl.plot(self.path[1], self.path[0],'r-',linewidth=1)
@@ -56,13 +70,6 @@ class pixellate_map():
         pl.show(block=False )
 
 
-    # def pixellate_map(self):    
-    #     for x in range(0, self.numberOfBoxSmall, self.filter_size):
-    #         for y in range(0, self.numberOfBoxSmall, self.filter_size): 
-    #             for x_s in range(x, x+self.filter_size):
-    #                 for y_s in range( y, y+self.filter_size):
-    #                     if self.prob_map[x_s][y_s] > self.obstacle_threshold:
-    #                         self.drive_map[int(x/self.filter_size)][int(y/self.filter_size)] = 123456
 
     def show_data(self, obstacle_map_msg_data):
         text = []
@@ -94,9 +101,12 @@ class pixellate_map():
                         break
                     
 
+
     def clear_drive_map(self):
         self.path_map = -pl.ones((self.numberOfBox, self.numberOfBox))
         self.path = []
+
+
 
     def calculate_dists(self):
         #         up  right  down   left
@@ -118,6 +128,8 @@ class pixellate_map():
                                 if( self.path_map[x_s][y_s] == -1):
                                     self.path_map[x_s][y_s] = d + 1
                 
+
+
 
     def path_finding(self):
          #         up  right  down   left
@@ -161,13 +173,7 @@ class pixellate_map():
         self.path = [x_path, y_path]    
 
 
-    def normalize_angle(self, angle):
-        while angle > 180:
-            angle -= 360
-        while angle < -180:
-            angle += 360
-        return angle        
-                         
+             
     def calculate_angle(self, path):
         angle_tab = []
 
