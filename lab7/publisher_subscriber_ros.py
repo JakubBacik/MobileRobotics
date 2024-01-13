@@ -61,7 +61,7 @@ class velocity_node(Node):
 '''
 class laser_node(Node):
     def __init__(self):
-        super().__init__('data_subscriber')
+        super().__init__('data_subscriber') 
         self.lidar_buf = 0
 
         self.sub_lidar = self.create_subscription(LaserScan, '/demo/laser/out', self.lidar_callback, 10)
@@ -70,3 +70,5 @@ class laser_node(Node):
 
     def lidar_callback(self, msg):
         self.lidar_buf = msg.ranges
+
+

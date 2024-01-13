@@ -20,7 +20,7 @@ class grid_map:
         self.p_hit = 0.90
         self.p_miss = 0.40
 
-        self.sensor_displacement = 0.15
+        self.sensor_displacement = 0#.15
         self.pathX = []
         self.pathY = []
 

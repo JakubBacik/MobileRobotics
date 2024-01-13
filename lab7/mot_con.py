@@ -85,67 +85,6 @@ def set_correct_angle_position(current, odom_raw_data, velocity_publisher, rate)
         velocity_publisher.publish_velocity(0.0, w)
         rate.sleep()
 
-def robot_drive( pid_linear, odom_raw_data, velocity_publisher, rate, laser_raw_data):
-    global list_of_path
-    global list_of_angle
-
-    i = 0
-    while True:  
-        print(i) 
-        # if abs(odom_raw_data.pose[0] - list_of_path[1][0]) < 0.2 and abs(odom_raw_data.pose[1] - list_of_path[1][1]) < 0.2:
-        #     i=2
-        # else:
-        #     i=1
-
-        if check_front( laser_raw_data, velocity_publisher, odom_raw_data, rate):  
-            velocity_publisher.publish_velocity(0.0, 0.0)    
-
-        pid_linear.current = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]] 
-        pid_linear.goal = list_of_path[i] 
-        pid_linear.goal_angle = list_of_angle[i]
-        print("set linear ", pid_linear.current , " | " , pid_linear.goal)
-
-        v, w = pid_linear.iteratePID()
-
-        velocity_publisher.publish_velocity(v, w) 
-        
-
-        distance_to_goal = np.sqrt((pid_linear.goal[0] - pid_linear.current[0])**2 + (pid_linear.goal[1] - pid_linear.current[1])**2)
-
-        if distance_to_goal < pid_linear.arrive_distance or abs(odom_raw_data.pose[2] - list_of_angle[i]) > 2.14:
-            angularController = PID_angular(Kp = 10.0, Ki =0.5, Kd=0.01, dt=0.1,  desired_w=20.0 )
-            desired_angle = list_of_angle[i]  
-            angle_tolerance = 0.2
-
-            while True:
-                current_angle = odom_raw_data.pose[2]  
-                print("set angle123 ",current_angle , " | " ,desired_angle)
-                error_angle = desired_angle - current_angle
-                error_angle = (error_angle + np.pi) % (2 * np.pi) - np.pi
-
-
-                if abs(error_angle) < angle_tolerance:
-                    velocity_publisher.publish_velocity(0.0, 0.0)
-                    rate.sleep() 
-                    rate.sleep() 
-                    rate.sleep() 
-                    rate.sleep() 
-                    rate.sleep() 
-                    rate.sleep() 
-                    rate.sleep() 
-                    rate.sleep() 
-                    i=i+1
-                    break
-
-                # Calculate angular velocity using the angular controller
-                w = angularController.control(error_angle)
-
-                velocity_publisher.publish_velocity(0.0, w) 
-                rate.sleep() 
-
-        rate.sleep()
-        if i == len(list_of_path):
-            break
 
 
 def main(args=None):
@@ -175,6 +114,12 @@ def main(args=None):
     pl.figure(figsize=(20, 10))
     pl.subplot(1, 3, 1)
     position = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]]
+
+    pixellate_map_obj.set_end_position(end_of_robot_position)
+    current_pos = box_coord(position[0], position[1], grid_map_obj)
+    # print("Robot position ", [position[0], position[1]])
+    pixellate_map_obj.set_start_position([current_pos[0], current_pos[1]])
+    
     grid_map_obj.iterateLidar( laser_raw_data.lidar_buf.tolist(), position)
     grid_map_obj.printMap(position)
 
@@ -186,6 +131,7 @@ def main(args=None):
     ax = pl.subplot(1, 3, 3)
     ax.set_xlim(0, pixellate_map_obj.numberOfBox-1)
     ax.set_ylim(0, pixellate_map_obj.numberOfBox-1)
+    ax.grid()
     pixellate_map_obj.calculate_dists()
     pixellate_map_obj.print_path_map()
     
@@ -214,9 +160,9 @@ def main(args=None):
             pixellate_map_obj.clear_drive_map()
             pixellate_map_obj.set_end_position(end_of_robot_position)
             current_pos = box_coord(position[0], position[1], grid_map_obj)
-            print("Robot BOX position ", [position[0], position[1]])
+            print("Robot position ", [position[0], position[1]])
             pixellate_map_obj.set_start_position([current_pos[0], current_pos[1]])
-            print("Robot position ", [current_pos[0], current_pos[1]])
+            print("Robot BOX  position ", [current_pos[0], current_pos[1]])
             
 
             pixellate_map_obj.calculate_dists()
@@ -230,6 +176,7 @@ def main(args=None):
 
             pixellate_map_obj.path_finding()
             pixellate_map_obj.draw_path()  
+            velocity_publisher.publish_velocity(0.0, 0.0)
             print("Robot path  ",pixellate_map_obj.path)
             
             if k == 2:
@@ -270,8 +217,8 @@ def main(args=None):
 
                     current = [odom_raw_data.pose[0], odom_raw_data.pose[1], odom_raw_data.pose[2]] 
                     distance_to_goal = np.sqrt((goal[0] - current[0])**2 + (goal[1] - current[1])**2)
-                    linearController = PID(kp = 0.09, ki =0.015, kd=0.001, limit=0.5)
-                    angularController = PID(kp = 0.25, ki =0.020, kd=0.002, limit=4)
+                    linearController = PID(kp = 0.10, ki =0.015, kd=0.001, limit=2)
+                    angularController = PID(kp = 0.25, ki =0.020, kd=0.002, limit=1)
                     d_x = goal[0] - current[0]
                     d_y = goal[1] - current[1]
 
@@ -288,9 +235,9 @@ def main(args=None):
                     # Handle the discontinuity at -π and π
                     if abs(desired_angle - current_angle) > np.pi:
                         if desired_angle > current_angle:
-                            desired_angle -= 2 * np.pi
+                            desired_angle -= np.pi
                         else:
-                            current_angle -= 2 * np.pi
+                            current_angle -= np.pi
 
                     # Calculate the difference between the desired and current angles
                     error_angle = desired_angle - current_angle

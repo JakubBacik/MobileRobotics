@@ -1,6 +1,6 @@
 import pylab as pl
 import numpy as np
-
+import math
 
 class pixellate_map():
     def __init__(self):
@@ -74,13 +74,14 @@ class pixellate_map():
                     for y_s in range(y, min(y+self.filter_size, self.numberOfBoxSmall)):
                         if self.prob_map[x_s][y_s] > self.obstacle_threshold:
                             obstacle_in_block = True
+                            x1 = x_s // self.filter_size if x_s % self.filter_size < 3 else x_s // self.filter_size + 1
+                            y1 = y_s // self.filter_size if y_s % self.filter_size < 3 else y_s // self.filter_size + 1
+
+                            self.drive_map[x1][y1] = 123456
                             break
                     if obstacle_in_block:
                         break
-                # If there's an obstacle in the current block, mark the corresponding cell in the drive_map as an obstacle
-                if obstacle_in_block:
-                    # Round the coordinates to the nearest multiple of self.filter_size before dividing
-                    self.drive_map[round(x/self.filter_size)][round(y/self.filter_size)] = 123456
+                    
 
     def clear_drive_map(self):
         self.path_map = -pl.ones((self.numberOfBox, self.numberOfBox))
