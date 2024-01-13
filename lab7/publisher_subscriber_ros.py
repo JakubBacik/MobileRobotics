@@ -1,10 +1,8 @@
 from rclpy.node import Node
-from geometry_msgs.msg import Twist     
-from nav_msgs.msg import Odometry     
+from geometry_msgs.msg import Twist, PoseStamped     
+from nav_msgs.msg import Odometry, OccupancyGrid, Path  
 from sensor_msgs.msg import LaserScan 
-from nav_msgs.msg import OccupancyGrid
-from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Path
+
 import numpy as np
 
 '''
@@ -94,7 +92,6 @@ class path_map_msg(Node):
 
         self.publisher_robot_state1.publish(msg)    
 
-    
 
 '''
   This class is used to publish velocity commands to the robot.

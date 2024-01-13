@@ -1,4 +1,3 @@
-
 def map_coord(x, y, Map ):
     real_x = (x*Map.filter_size - Map.center_before_reducing) * Map.resolution_before_reducing
     real_y = (y*Map.filter_size - Map.center_before_reducing) * Map.resolution_before_reducing

@@ -25,33 +25,13 @@ class grid_map:
         self.pathY = []
 
 
+    def show_data(self, map_msg_data):
+        text = []
+        for i in self.prob_map:
+            for j in i:
+                text.append(int(j*100))
 
-    def printMap(self, pose):
-        boxCordPos = self.box_coord(pose[0], pose[1])
-        self.pathX.append(boxCordPos[0])
-        self.pathY.append(boxCordPos[1])    
-        self.show = pl.imshow( self.map, interpolation="nearest", cmap='Blues', origin='lower')
-        pl.show( block=False )
-        pl.pause( 0.1 )
-
-    def print_drive_map(self):
-        self.drive_show = pl.imshow( self.drive_map, interpolation="nearest", cmap='Blues', origin='lower')
-        pl.show( block=False )
-
-    def update_drive_map(self):
-        self.drive_show.set_data(self.drive_map)
-
-
-
-    def update(self, pose):
-        # boxCordPos = self.box_coord(pose[0], pose[1])
-        # self.pathX.append(boxCordPos[0])
-        # self.pathY.append(boxCordPos[1])
-        self.show.set_data(self.map)
-        # pl.plot(self.pathX, self.pathY,'r-',linewidth=1)
-        pl.show( block=False )
-        pl.pause( 0.1 )
-
+        map_msg_data.publish_map(text)
 
 
     def iterateLidar(self, dataScan, robot_position):
@@ -59,9 +39,7 @@ class grid_map:
         max_angle = 2.0932999382019043
         angle_increment = 0.006144199054688215
 
-
         theta = pl.arange(min_angle, max_angle, angle_increment)
-
         sensor_position = sensor_shift( self.sensor_displacement, 0, robot_position)
         
         for k in range(len(dataScan)):
@@ -73,20 +51,12 @@ class grid_map:
 
             obstacle_x = int(pt[0]/self.resolution_before_reducing) + self.center_before_reducing
             obstacle_y = int(pt[1]/self.resolution_before_reducing) + self.center_before_reducing
-            # if(abs(pt[0] - sensor_position[1]) > 0.1 and abs(pt[1] - sensor_position[1])  > 0.1):
+
             self.map[obstacle_y][obstacle_x] = self.hit( self.map[obstacle_y][obstacle_x] )
         
 
         self.prob_map = self.computeProbab(self.map)
 
-
-    def show_data(self, map_msg_data):
-        text = []
-        for i in self.prob_map:
-            for j in i:
-                text.append(int(j*100))
-
-        map_msg_data.publish_map(text)
 
     def ray_trace(self, end, start):
         A = end[1] - start[1]
@@ -156,9 +126,6 @@ class grid_map:
                 elif( l_hit ):
                     y = y_l
 
-                
-
-
         else:
             for y in self.scan_line_range( start_box, end_box, 1):
                 center_hit = 0
@@ -207,21 +174,15 @@ class grid_map:
                     x = x_l
 
                 
-
-
-
     def box_coord(self, x, y ):
         box_x = int( x / self.resolution_before_reducing) + self.center_before_reducing
         box_y = int( y / self.resolution_before_reducing) + self.center_before_reducing
         return pl.array([box_x, box_y])
 
-
-
     def map_coord(self, x, y ):
         real_x = (x - self.center_before_reducing) * self.resolution_before_reducing
         real_y = (y - self.center_before_reducing) * self.resolution_before_reducing
         return pl.array([real_x, real_y])
-
 
 
     def scan_line_range(self, start, end, coord):
@@ -237,7 +198,6 @@ class grid_map:
         return scan_range
                    
 
-
     def computeProbab(self, field):
         return 1 - (1/(1 + pl.exp(field)))	
     
@@ -246,14 +206,14 @@ class grid_map:
         if (field > self.hit_threshold):
             field = self.hit_threshold
         return field
-
-	    
+ 
 	    
     def miss(self, field):
         field = field + pl.log(self.p_miss/(1-self.p_miss))
         if (field < self.miss_threshold):
             field = self.miss_threshold
         return field
+   
     
 def pol2Car(r, theta, pose):
     x = r * cos(theta+pose[2]) + pose[0]
