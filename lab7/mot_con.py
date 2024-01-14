@@ -16,14 +16,24 @@ global end_angle_of_robot_position
 global list_of_path
 global list_of_angle
 
-def read_from_input():
+def box_coord123(x, y, resolution_before_reducing, center_before_reducing, filter_size):
+    x =round(x * 2) / 2
+    y =round(y * 2) / 2
+    box_x = (x / resolution_before_reducing) + center_before_reducing
+    box_y = (y / resolution_before_reducing) + center_before_reducing
+    return [int(box_x/filter_size), int(box_y/filter_size)]
+
+
+def read_from_input(resolution_before_reducing, center_before_reducing, filter_size):
     global end_of_robot_position
     global end_angle_of_robot_position
     print("To change the path, enter the new path in the form: x, y")
     while True:    
         number = input(".")
         number = number.split(' ')
-        end_of_robot_position = [int(number[0]), int(number[1])]
+        point = box_coord123(float(number[0]), float(number[1]), resolution_before_reducing, center_before_reducing, filter_size)
+        end_of_robot_position = [point[0], point[1]]
+        print(int(number[0]), int(number[1]), "end: ", end_of_robot_position)
         end_angle_of_robot_position = float(number[2])
 
 def init_node():
@@ -113,7 +123,7 @@ def set_correct_angle_position(current, odom_raw_data, velocity_publisher, rate)
     while True:
         # Calculate the current angle error
         current_angle = odom_raw_data.pose[2] 
-        print("set angle ", current_angle, " | " ,desired_angle)
+        # print("set angle ", current_angle, " | " ,desired_angle)
 
         # print(desired_angle, " ", current_angle)
         error_angle = desired_angle - current_angle
@@ -146,7 +156,7 @@ def main(args=None):
     grid_map_obj = grid_map()
     pixellate_map_obj = pixellate_map()
 
-    read_from_input_thread = threading.Thread(target=read_from_input, daemon=True)
+    read_from_input_thread = threading.Thread(target=read_from_input, args=(grid_map_obj.resolution_before_reducing, grid_map_obj.center_before_reducing, grid_map_obj.filter_size), daemon=True)
     executor_thread = threading.Thread(target=executor.spin, daemon=True)
     path_map_creator = threading.Thread(target=robot_map, args=(odom_raw_data, grid_map_obj, pixellate_map_obj, laser_raw_data, map_msg_data, obstacle_map_msg_data, path_map_msg_data), daemon=True)
     
@@ -159,20 +169,18 @@ def main(args=None):
     read_from_input_thread.start()
     path_map_creator.start()
 
-    k = 0
+    iteration = 0
     while rclpy.ok(): 
         while len(list_of_path_from_thread) == 0:
             rate.sleep()
-            
-        if k == 2:
+        if iteration  == 0:
+            velocity_publisher.publish_velocity(0.0, 0.0)  
+
+        if iteration  == 2:
             set_correct_angle_position([list_of_path_from_thread[1][0], list_of_path_from_thread[1][1]], odom_raw_data, velocity_publisher, rate)
 
-        if k == 0:
-            velocity_publisher.publish_velocity(0.0, 0.0)
-
-        if k > 2:
-
-            flag =0
+        if iteration  > 2:
+            flag_end_of_small_move  =0
             next_position = list_of_path_from_thread[1]
             arrive_distance = 0.09
             angle_tolerance = 0.01
@@ -182,11 +190,11 @@ def main(args=None):
             while True:  
                 if check_front( laser_raw_data, 0.2):  
                     velocity_publisher.publish_velocity(0.0, 0.0)
-                    print("Obstacle in front of the robot")  
+                    # print("Obstacle in front of the robot")  
                     break
 
-                if flag == 1:
-                    flag = 0
+                if flag_end_of_small_move == 1:
+                    flag_end_of_small_move  = 0
                     break
 
                 distance_to_goal = np.sqrt((next_position[0] - odom_raw_data.pose[0])**2 + (next_position[1] - odom_raw_data.pose[1])**2)
@@ -195,28 +203,30 @@ def main(args=None):
 
                 w = angularController.calc(error_angle, 0)
                 v = linearController.calc(distance_to_goal, 0)
-
-                print("Desired position", next_position[0], " ", next_position[1], " current: ", round(odom_raw_data.pose[0], 3), " ", round(odom_raw_data.pose[1], 3))
                 velocity_publisher.publish_velocity(v, w) 
                 rate.sleep()
 
+                # print("Desired position", next_position[0], " ", next_position[1], " current: ", round(odom_raw_data.pose[0], 3), " ", round(odom_raw_data.pose[1], 3))
+                
 
                 if distance_to_goal <  arrive_distance: 
                     angularController = PID(kp = 0.09, ki =0.015, kd=0.01, limit=0.25)
 
                     while True:
-                        
                         error_angle = list_of_angle_from_thread[0] - odom_raw_data.pose[2]
-                        print("Desired angle: " , round(list_of_angle_from_thread[0], 3), " current: ", round(odom_raw_data.pose[2], 3))
+                        
                         if abs(error_angle) < angle_tolerance:
                             velocity_publisher.publish_velocity(0.0, 0.0)
                             rate.sleep() 
-                            flag = 1
+                            flag_end_of_small_move  = 1
                             break
 
                         w = angularController.calc(error_angle, 0)
-                        velocity_publisher.publish_velocity(0.0, float(w)) 
+                        velocity_publisher.publish_velocity(0.0, float(w))
+
                         rate.sleep() 
+
+                        # print("Desired angle: " , round(list_of_angle_from_thread[0], 3), " current: ", round(odom_raw_data.pose[2], 3))
 
                 rate.sleep()
                 # print(list_of_path_from_thread, len(list_of_path_from_thread))
@@ -227,7 +237,7 @@ def main(args=None):
             if end_of_path_flag == 1:
                 break                     
 
-        k+=1
+        iteration +=1
         
     
 
