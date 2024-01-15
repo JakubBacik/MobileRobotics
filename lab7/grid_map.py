@@ -53,6 +53,8 @@ class grid_map:
             obstacle_y = int(pt[1]/self.resolution_before_reducing) + self.center_before_reducing
 
             self.map[obstacle_y][obstacle_x] = self.hit( self.map[obstacle_y][obstacle_x] )
+            # self.map[obstacle_y+1][obstacle_x+1] = self.hit( self.map[obstacle_y][obstacle_x] )
+        
         
 
         self.prob_map = self.computeProbab(self.map)
